@@ -802,18 +802,20 @@ export const HunterTab: React.FC<HunterTabProps> = ({
                   </span>
                   {/* Persistent mini status chip near the XP track */}
                   <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-colors ${
+                    className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-colors shadow-xs ${
                       (activeHunter.levelUpCount || 0) >= 5
-                        ? 'bg-amber-950/70 border-amber-500/60 text-amber-300'
+                        ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-amber-500/10'
                         : 'bg-neutral-850 border-neutral-700 text-neutral-300'
                     }`}
                     title={
                       (activeHunter.levelUpCount || 0) >= 5
-                        ? 'Advanced Improvements Unlocked!'
+                        ? `Advanced Improvements Unlocked! Total Level Ups: ${activeHunter.levelUpCount || 0}`
                         : `${5 - (activeHunter.levelUpCount || 0)} more level ups to unlock Advanced Improvements`
                     }
                   >
-                    Level Ups: {activeHunter.levelUpCount || 0} / 5
+                    {(activeHunter.levelUpCount || 0) >= 5
+                      ? `⭐ Level ${activeHunter.levelUpCount || 0} (Advanced Unlocked)`
+                      : `Level Ups: ${activeHunter.levelUpCount || 0}/5 to Advanced`}
                   </span>
                 </div>
 
