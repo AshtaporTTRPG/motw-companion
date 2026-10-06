@@ -1,0 +1,12 @@
+{
+  "name": "MOTW Companion",
+  "version": "1.0.0",
+  "manifest_version": 1,
+  "action": {
+    "title": "MOTW Companion",
+    "icon": "https://ashtaporttrpg.github.io/motw-companion/icon.svg",
+    "popover": "https://ashtaporttrpg.github.io/motw-companion/index.html?v=1.0.0",
+    "width": 480,
+    "height": 820
+  }
+}

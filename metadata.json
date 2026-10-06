@@ -1,0 +1,6 @@
+{
+  "name": "MOTW Companion",
+  "description": "Monster of the Week Owlbear Rodeo extension companion featuring hunter playbooks, moves, dice rolling, grimoire, and keeper utilities.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
