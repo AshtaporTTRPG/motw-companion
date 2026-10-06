@@ -1,4 +1,5 @@
 import { PlaybookDefinition } from '../types/motw';
+import { EXPANSION_PLAYBOOKS } from './expansionPlaybooks';
 
 export const PLAYBOOKS: PlaybookDefinition[] = [
   {
@@ -461,4 +462,5 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
       'Smartphone with unlimited high-speed data & livestream',
     ],
   },
+  ...EXPANSION_PLAYBOOKS,
 ];
