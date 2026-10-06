@@ -69,6 +69,13 @@ export interface PlaybookMove {
   description: string;
 }
 
+export interface PlaybookSubMechanic {
+  title: string;
+  description: string;
+  options?: string[];
+  track?: string[];
+}
+
 export interface PlaybookDefinition {
   id: string;
   name: string;
@@ -79,6 +86,7 @@ export interface PlaybookDefinition {
   moves: PlaybookMove[];
   improvements: string[];
   gearChoices: string[];
+  subMechanics?: PlaybookSubMechanic;
 }
 
 export interface HunterScopedNotes {

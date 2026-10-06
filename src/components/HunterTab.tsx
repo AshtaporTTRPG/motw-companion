@@ -623,6 +623,55 @@ export const HunterTab: React.FC<HunterTabProps> = ({
             </div>
           </div>
 
+          {/* Playbook Sub-Mechanic & Lore */}
+          {selectedPlaybookDef.subMechanics && (
+            <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-2.5 space-y-2 shadow-xs">
+              <div className="flex items-center justify-between text-xs font-bold text-amber-300">
+                <span className="flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  {selectedPlaybookDef.subMechanics.title}
+                </span>
+                <span className="text-[10px] text-amber-400/70 uppercase tracking-wide font-mono">Special Mechanic</span>
+              </div>
+
+              <p className="text-[11px] text-neutral-300 leading-relaxed">
+                {selectedPlaybookDef.subMechanics.description}
+              </p>
+
+              {selectedPlaybookDef.subMechanics.track && selectedPlaybookDef.subMechanics.track.length > 0 && (
+                <div className="space-y-1 pt-1 border-t border-neutral-800/80">
+                  <div className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">Status Track</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedPlaybookDef.subMechanics.track.map((box, i) => (
+                      <span
+                        key={i}
+                        className="px-2 py-0.5 rounded bg-neutral-950 border border-amber-500/40 text-[10px] text-amber-200 font-mono"
+                      >
+                        {box}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedPlaybookDef.subMechanics.options && selectedPlaybookDef.subMechanics.options.length > 0 && (
+                <div className="space-y-1 pt-1 border-t border-neutral-800/80">
+                  <div className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">Archetype Options & Traits</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedPlaybookDef.subMechanics.options.map((opt, i) => (
+                      <span
+                        key={i}
+                        className="px-1.5 py-0.5 rounded bg-neutral-950 border border-neutral-800 text-[10px] text-neutral-300"
+                      >
+                        {opt}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Playbook Moves Checklist */}
           <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-2.5 space-y-2 shadow-xs">
             <div className="flex items-center justify-between text-xs font-bold text-neutral-200">
