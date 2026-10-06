@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { HunterProfile, HunterStats, StatType } from '../types/motw';
+import React, { useState, useRef } from 'react';
+import { HunterProfile, HunterStats, StatType, BorrowedMove, CustomMove } from '../types/motw';
 import { PLAYBOOKS } from '../data/playbooks';
 import { PlaybookSubPanel } from './PlaybookSubPanel';
 import { detectStatFromMove } from '../utils/rollEngine';
@@ -22,8 +22,20 @@ import {
   Crosshair,
   Info,
   Dices,
-  Crown
+  Crown,
 } from 'lucide-react';
+
+const ADVANCED_IMPROVEMENTS: string[] = [
+  'Get +1 to any rating (max +3)',
+  'Mark two of the basic moves as advanced',
+  'Mark another two of the basic moves as advanced',
+  'Erase one used Luck mark from your Luck track',
+  'Take a move from another playbook',
+  'Retire this hunter to safety',
+  'Remove a Doom, Dark Side, or Curse tag from your hunter',
+  'Change this hunter to a new type (change playbook)',
+  'Create a second hunter to play as well as this one',
+];
 
 interface HunterTabProps {
   currentUserId: string;
@@ -35,7 +47,7 @@ interface HunterTabProps {
   onUpdateHunter: (hunter: HunterProfile) => void;
   onCreateHunter: (hunter: HunterProfile) => void;
   onDeleteHunter: (hunterId: string) => void;
-  onQuickRoll: (stat: StatType, moveName: string) => void;
+  onQuickRoll: (stat: StatType | undefined, moveName: string) => void;
 }
 
 export const HunterTab: React.FC<HunterTabProps> = ({
@@ -54,6 +66,19 @@ export const HunterTab: React.FC<HunterTabProps> = ({
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isLevelUpModalOpen, setIsLevelUpModalOpen] = useState(false);
 
+  // Borrow Playbook Move State
+  const [isBorrowMoveModalOpen, setIsBorrowMoveModalOpen] = useState(false);
+  const [borrowSourcePlaybookId, setBorrowSourcePlaybookId] = useState('');
+  const [selectedBorrowedMoveId, setSelectedBorrowedMoveId] = useState<string | null>(null);
+
+  // Custom Moves State
+  const [isCustomMovesExpanded, setIsCustomMovesExpanded] = useState(true);
+  const [isCustomMoveModalOpen, setIsCustomMoveModalOpen] = useState(false);
+  const [customMoveId, setCustomMoveId] = useState<string | null>(null);
+  const [customMoveName, setCustomMoveName] = useState('');
+  const [customMoveStat, setCustomMoveStat] = useState('none');
+  const [customMoveDesc, setCustomMoveDesc] = useState('');
+
   // New Hunter Creation Form State
   const [newName, setNewName] = useState('');
   const [newPlaybookId, setNewPlaybookId] = useState(PLAYBOOKS[0].id);
@@ -66,8 +91,111 @@ export const HunterTab: React.FC<HunterTabProps> = ({
 
   const creationPlaybookDef = PLAYBOOKS.find((p) => p.id === newPlaybookId) || PLAYBOOKS[0];
 
+  // Other playbooks for borrowing moves (27 other playbooks)
+  const otherPlaybooks = PLAYBOOKS.filter(
+    (p) =>
+      p.name.toLowerCase() !== selectedPlaybookDef.name.toLowerCase() &&
+      p.id !== selectedPlaybookDef.id
+  );
+
+  const effectiveBorrowSourceId =
+    borrowSourcePlaybookId && otherPlaybooks.some((p) => p.id === borrowSourcePlaybookId)
+      ? borrowSourcePlaybookId
+      : otherPlaybooks[0]?.id || PLAYBOOKS[0].id;
+
+  const borrowSourcePlaybookDef =
+    otherPlaybooks.find((p) => p.id === effectiveBorrowSourceId) || otherPlaybooks[0] || PLAYBOOKS[0];
+
+  const selectedMoveToBorrow = borrowSourcePlaybookDef?.moves.find(
+    (m) => m.id === selectedBorrowedMoveId
+  );
+
   // Filter hunters owned by current player
   const myHunters = allHunters.filter((h) => h.ownerId === currentUserId);
+
+  // JSON Backup & Restore Handlers
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExportJson = () => {
+    if (!activeHunter) return;
+    const sanitizedName = (activeHunter.name || 'Hunter').trim().replace(/[^a-zA-Z0-9_-]/g, '_');
+    const fileName = `${sanitizedName}-motw.json`;
+    const dataStr = JSON.stringify(activeHunter, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportJson = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        const parsed = JSON.parse(text);
+
+        if (!parsed || typeof parsed !== 'object') {
+          return;
+        }
+
+        const importedId = parsed.id || `hunter-${Date.now()}`;
+        const importedHunter: HunterProfile = {
+          ...parsed,
+          id: importedId,
+          name: parsed.name || 'Imported Hunter',
+          playbook: parsed.playbook || 'The Mundane',
+          look: parsed.look || '',
+          harm: typeof parsed.harm === 'number' ? parsed.harm : 0,
+          unstable: Boolean(parsed.unstable),
+          luck: typeof parsed.luck === 'number' ? parsed.luck : 7,
+          experience: typeof parsed.experience === 'number' ? parsed.experience : 0,
+          levelUpCount: typeof parsed.levelUpCount === 'number' ? parsed.levelUpCount : 0,
+          advancementsTaken: Array.isArray(parsed.advancementsTaken)
+            ? parsed.advancementsTaken
+            : (Array.isArray(parsed.improvementsTaken) ? parsed.improvementsTaken : []),
+          borrowedMoves: Array.isArray(parsed.borrowedMoves) ? parsed.borrowedMoves : [],
+          customMoves: Array.isArray(parsed.customMoves) ? parsed.customMoves : [],
+          stats: {
+            charm: parsed.stats?.charm ?? 0,
+            cool: parsed.stats?.cool ?? 0,
+            sharp: parsed.stats?.sharp ?? 0,
+            tough: parsed.stats?.tough ?? 0,
+            weird: parsed.stats?.weird ?? 0,
+          },
+          selectedMoves: Array.isArray(parsed.selectedMoves) ? parsed.selectedMoves : [],
+          gear: parsed.gear || '',
+          luckSpecial: parsed.luckSpecial || '',
+          improvementsTaken: Array.isArray(parsed.improvementsTaken) ? parsed.improvementsTaken : [],
+          ownerId: parsed.ownerId || currentUserId,
+          ownerName: parsed.ownerName || currentUserName,
+          createdAt: parsed.createdAt || Date.now(),
+        };
+
+        const existing = allHunters.find((h) => h.id === importedHunter.id);
+        if (existing) {
+          onUpdateHunter(importedHunter);
+        } else {
+          onCreateHunter(importedHunter);
+        }
+        onSelectHunter(importedHunter);
+      } catch (err) {
+        console.error('Failed to parse hunter JSON:', err);
+      } finally {
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+    };
+    reader.readAsText(file);
+  };
 
   // Level Up Trigger: Check if 5 XP reached
   const handleExpClick = (index: number) => {
@@ -163,6 +291,10 @@ export const HunterTab: React.FC<HunterTabProps> = ({
       unstable: false,
       luck: 0,
       experience: 0,
+      levelUpCount: 0,
+      advancementsTaken: [],
+      borrowedMoves: [],
+      customMoves: [],
       stats: { ...stats },
       selectedMoves: creationPlaybookDef.moves.slice(0, 2).map((m) => m.id),
       gear: creationPlaybookDef.gearChoices.slice(0, 2).join('\n'),
@@ -181,65 +313,178 @@ export const HunterTab: React.FC<HunterTabProps> = ({
   // Level Up Improvement Selected
   const handleSelectImprovement = (improvement: string) => {
     if (!activeHunter) return;
+    const currentCount = activeHunter.levelUpCount || 0;
+    const nextCount = currentCount + 1;
+    const currentAdv = activeHunter.advancementsTaken || activeHunter.improvementsTaken || [];
+    const nextAdv = [...currentAdv, improvement];
+
+    let nextLuck = activeHunter.luck;
+    if (improvement.toLowerCase().includes('erase') && improvement.toLowerCase().includes('luck')) {
+      nextLuck = Math.max(0, activeHunter.luck - 1);
+    }
+
+    const updated: HunterProfile = {
+      ...activeHunter,
+      experience: 0,
+      levelUpCount: nextCount,
+      advancementsTaken: nextAdv,
+      improvementsTaken: nextAdv,
+      luck: nextLuck,
+    };
+
+    onUpdateHunter(updated);
+    setIsLevelUpModalOpen(false);
+
+    // If taking a move from another playbook, immediately trigger the Borrow Move modal
+    if (improvement.toLowerCase().includes('move from another playbook')) {
+      if (otherPlaybooks.length > 0) {
+        setBorrowSourcePlaybookId(otherPlaybooks[0].id);
+      }
+      setSelectedBorrowedMoveId(null);
+      setIsBorrowMoveModalOpen(true);
+    }
+  };
+
+  // Borrow Playbook Move Submission
+  const handleAddBorrowedMove = () => {
+    if (!activeHunter || !selectedMoveToBorrow) return;
+    const existing = activeHunter.borrowedMoves || [];
+    if (existing.some((m) => m.id === selectedMoveToBorrow.id)) {
+      setIsBorrowMoveModalOpen(false);
+      return;
+    }
+
+    const newBorrowed: BorrowedMove = {
+      id: selectedMoveToBorrow.id,
+      name: selectedMoveToBorrow.name,
+      playbookName: borrowSourcePlaybookDef.name,
+      description: selectedMoveToBorrow.description,
+      stat:
+        selectedMoveToBorrow.stat ||
+        detectStatFromMove(undefined, selectedMoveToBorrow.name, selectedMoveToBorrow.description),
+    };
+
     onUpdateHunter({
       ...activeHunter,
-      experience: Math.max(0, activeHunter.experience - 5),
-      improvementsTaken: [...(activeHunter.improvementsTaken || []), improvement],
+      borrowedMoves: [...existing, newBorrowed],
     });
-    setIsLevelUpModalOpen(false);
+    setIsBorrowMoveModalOpen(false);
+    setSelectedBorrowedMoveId(null);
+  };
+
+  // Custom Move Builder Submission
+  const handleSaveCustomMove = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeHunter || !customMoveName.trim()) return;
+
+    const existingMoves = activeHunter.customMoves || [];
+    const statVal = customMoveStat === 'none' ? undefined : (customMoveStat as StatType);
+
+    let updatedMoves: CustomMove[];
+    if (customMoveId) {
+      // Edit existing
+      updatedMoves = existingMoves.map((m) =>
+        m.id === customMoveId
+          ? {
+              ...m,
+              name: customMoveName.trim(),
+              stat: statVal,
+              description: customMoveDesc.trim(),
+            }
+          : m
+      );
+    } else {
+      // Create new
+      const newMove: CustomMove = {
+        id: 'custom-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+        name: customMoveName.trim(),
+        stat: statVal,
+        description: customMoveDesc.trim(),
+      };
+      updatedMoves = [...existingMoves, newMove];
+    }
+
+    onUpdateHunter({
+      ...activeHunter,
+      customMoves: updatedMoves,
+    });
+
+    setIsCustomMoveModalOpen(false);
+    setCustomMoveId(null);
+    setCustomMoveName('');
+    setCustomMoveStat('none');
+    setCustomMoveDesc('');
   };
 
   return (
     <div className="flex-1 flex flex-col h-full bg-neutral-950 overflow-hidden">
-      {/* Top Bar: Multi-Hunter Switcher + Keeper Roster Toggle */}
+      {/* Top Bar: Multi-Hunter Switcher + Action Buttons */}
       <div className="p-2 bg-neutral-900/90 border-b border-neutral-800 flex items-center justify-between gap-1.5 shrink-0">
-        {/* Hunter Selector Dropdown */}
-        <div className="flex-1 flex items-center gap-1.5 min-w-0">
-          <select
-            value={activeHunter?.id || ''}
-            onChange={(e) => {
-              const found = allHunters.find((h) => h.id === e.target.value);
-              if (found) onSelectHunter(found);
-            }}
-            className="flex-1 bg-neutral-950 border border-neutral-700 rounded px-2 py-1 text-xs text-amber-300 font-semibold focus:outline-none focus:border-amber-500 truncate"
-          >
-            {allHunters.length === 0 ? (
-              <option value="">No Hunters Created</option>
-            ) : (
-              allHunters.map((h) => (
-                <option key={h.id} value={h.id}>
-                  {h.name} — {h.playbook} {h.ownerId === currentUserId ? '(You)' : `(${h.ownerName})`}
-                </option>
-              ))
-            )}
-          </select>
+        {/* Left: Active Hunter select dropdown */}
+        <select
+          value={activeHunter?.id || ''}
+          onChange={(e) => {
+            const found = allHunters.find((h) => h.id === e.target.value);
+            if (found) onSelectHunter(found);
+          }}
+          className="flex-1 min-w-0 max-w-[210px] truncate text-xs font-semibold bg-neutral-950 border border-neutral-700 rounded px-2 h-8 text-amber-300 focus:outline-none focus:border-amber-500"
+        >
+          {allHunters.length === 0 ? (
+            <option value="">No Hunters Created</option>
+          ) : (
+            allHunters.map((h) => (
+              <option key={h.id} value={h.id}>
+                {h.name} — {h.playbook} {h.ownerId === currentUserId ? '(You)' : `(${h.ownerName})`}
+              </option>
+            ))
+          )}
+        </select>
 
+        {/* Right Cluster */}
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={() => setIsCreateModalOpen(true)}
             title="Create New Hunter"
-            className="px-2 py-1 bg-amber-600 hover:bg-amber-500 text-neutral-950 font-bold rounded text-xs flex items-center gap-1 shrink-0 cursor-pointer shadow-xs"
+            className="h-8 px-2.5 text-xs bg-amber-600 hover:bg-amber-500 font-medium rounded text-neutral-950 flex items-center gap-1 cursor-pointer"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>New</span>
+            <span>+ New</span>
           </button>
-        </div>
 
-        {/* Keeper Roster Drawer Button for GM */}
-        {role === 'GM' && (
           <button
-            onClick={() => setIsRosterOpen(!isRosterOpen)}
-            className={`px-2 py-1 rounded text-xs font-bold flex items-center gap-1 border transition-colors cursor-pointer shrink-0 ${
-              isRosterOpen
-                ? 'bg-purple-950 text-purple-300 border-purple-600'
-                : 'bg-neutral-800 text-neutral-300 border-neutral-700 hover:bg-neutral-700'
-            }`}
-            title="View All Table Hunters"
+            onClick={handleExportJson}
+            disabled={!activeHunter}
+            title="Export Hunter (JSON)"
+            className="h-8 w-8 flex items-center justify-center rounded bg-neutral-850 hover:bg-neutral-800 border border-neutral-700 text-neutral-300 cursor-pointer disabled:opacity-40"
           >
-            <Users className="w-3.5 h-3.5" />
-            <span>Roster ({allHunters.length})</span>
-            {isRosterOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            <span>💾</span>
           </button>
-        )}
+
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            title="Import Hunter (JSON)"
+            className="h-8 w-8 flex items-center justify-center rounded bg-neutral-850 hover:bg-neutral-800 border border-neutral-700 text-neutral-300 cursor-pointer"
+          >
+            <span>📥</span>
+          </button>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleImportJson}
+            className="hidden"
+          />
+
+          {role === 'GM' && (
+            <button
+              onClick={() => setIsRosterOpen(!isRosterOpen)}
+              title="Toggle Keeper Roster"
+              className="h-8 px-2 flex items-center gap-1 rounded bg-neutral-850 hover:bg-neutral-800 border border-neutral-700 text-xs font-medium text-amber-400 cursor-pointer"
+            >
+              <span>👥 {allHunters.length} ▾</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Keeper Roster Drawer for GM */}
@@ -548,12 +793,27 @@ export const HunterTab: React.FC<HunterTabProps> = ({
 
             {/* 3. EXPERIENCE TRACKER (5 boxes) */}
             <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-2.5 space-y-2 shadow-xs">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-amber-400" />
+              <div className="flex items-center justify-between gap-1 flex-wrap">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
                   <span className="text-xs font-bold text-neutral-200">Experience Tracker</span>
                   <span className="text-[10px] font-mono text-amber-400">
                     ({activeHunter.experience}/5 XP)
+                  </span>
+                  {/* Persistent mini status chip near the XP track */}
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border transition-colors ${
+                      (activeHunter.levelUpCount || 0) >= 5
+                        ? 'bg-amber-950/70 border-amber-500/60 text-amber-300'
+                        : 'bg-neutral-850 border-neutral-700 text-neutral-300'
+                    }`}
+                    title={
+                      (activeHunter.levelUpCount || 0) >= 5
+                        ? 'Advanced Improvements Unlocked!'
+                        : `${5 - (activeHunter.levelUpCount || 0)} more level ups to unlock Advanced Improvements`
+                    }
+                  >
+                    Level Ups: {activeHunter.levelUpCount || 0} / 5
                   </span>
                 </div>
 
@@ -588,10 +848,11 @@ export const HunterTab: React.FC<HunterTabProps> = ({
                 })}
               </div>
 
-              {activeHunter.improvementsTaken && activeHunter.improvementsTaken.length > 0 && (
-                <div className="pt-1 border-t border-neutral-800 text-[10px] text-neutral-400">
+              {((activeHunter.advancementsTaken && activeHunter.advancementsTaken.length > 0) ||
+                (activeHunter.improvementsTaken && activeHunter.improvementsTaken.length > 0)) && (
+                <div className="pt-1 border-t border-neutral-800 text-[10px] text-neutral-400 leading-relaxed">
                   <span className="font-semibold text-neutral-300">Improvements taken: </span>
-                  {activeHunter.improvementsTaken.join(', ')}
+                  {(activeHunter.advancementsTaken || activeHunter.improvementsTaken || []).join(', ')}
                 </div>
               )}
             </div>
@@ -734,6 +995,210 @@ export const HunterTab: React.FC<HunterTabProps> = ({
             </div>
           </div>
 
+          {/* Borrowed Moves Section */}
+          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-2.5 space-y-2 shadow-xs">
+            <div className="flex items-center justify-between text-xs font-bold text-neutral-200">
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                <span>Borrowed Moves</span>
+                <span className="text-[10px] text-amber-400/90 font-mono">
+                  ({(activeHunter.borrowedMoves || []).length})
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedBorrowedMoveId(null);
+                  setIsBorrowMoveModalOpen(true);
+                }}
+                className="px-2 py-0.5 rounded bg-amber-600/30 hover:bg-amber-500 hover:text-neutral-950 text-amber-300 font-semibold text-[10px] border border-amber-500/50 flex items-center gap-1 cursor-pointer transition-colors"
+                title="Borrow Playbook Move"
+              >
+                <Plus className="w-3 h-3" />
+                <span>Borrow Move</span>
+              </button>
+            </div>
+
+            {(!activeHunter.borrowedMoves || activeHunter.borrowedMoves.length === 0) ? (
+              <div className="p-3 rounded bg-neutral-950/60 border border-neutral-800/80 text-center text-neutral-400 text-xs">
+                <p className="italic">No borrowed moves yet.</p>
+                <p className="text-[11px] text-neutral-500 mt-0.5">
+                  Unlocked via the &quot;Take a move from another playbook&quot; improvement.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {activeHunter.borrowedMoves.map((bm) => {
+                  const moveStat =
+                    (bm.stat as StatType) ||
+                    detectStatFromMove(undefined, bm.name, bm.description);
+
+                  return (
+                    <div
+                      key={bm.id}
+                      className="p-2 rounded border bg-amber-950/20 border-amber-600/40 text-neutral-200 text-xs space-y-1"
+                    >
+                      <div className="flex items-center justify-between gap-1 flex-wrap">
+                        <div className="flex items-center gap-1.5 font-bold flex-wrap">
+                          <span className="text-amber-200">{bm.name}</span>
+                          <span className="text-[9px] px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300 font-normal">
+                            {bm.playbookName}
+                          </span>
+                          {moveStat && (
+                            <span className="text-[9px] px-1 rounded bg-neutral-800 text-amber-400 uppercase font-mono">
+                              +{moveStat}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            onClick={() => onQuickRoll(moveStat, bm.name)}
+                            title={`Roll ${bm.name} ${moveStat ? `(+${moveStat})` : ''}`}
+                            className="text-[10px] px-2 py-0.5 rounded bg-amber-600/30 hover:bg-amber-500 hover:text-neutral-950 text-amber-300 font-bold cursor-pointer border border-amber-500/50 flex items-center gap-1 shrink-0 shadow-xs transition-colors"
+                          >
+                            <Dices className="w-3 h-3" />
+                            <span>Roll</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              const updated = (activeHunter.borrowedMoves || []).filter(
+                                (m) => m.id !== bm.id
+                              );
+                              onUpdateHunter({ ...activeHunter, borrowedMoves: updated });
+                            }}
+                            title="Remove Borrowed Move"
+                            className="p-1 rounded text-neutral-500 hover:text-red-400 hover:bg-neutral-800 cursor-pointer"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <p className="text-[11px] text-neutral-300 leading-relaxed">
+                        {bm.description}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Custom Moves Expandable Section */}
+          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-2.5 space-y-2 shadow-xs">
+            <div className="flex items-center justify-between text-xs font-bold text-neutral-200">
+              <button
+                onClick={() => setIsCustomMovesExpanded(!isCustomMovesExpanded)}
+                className="flex items-center gap-1.5 cursor-pointer hover:text-amber-300 transition-colors"
+              >
+                <Crown className="w-3.5 h-3.5 text-amber-400" />
+                <span>Custom Moves</span>
+                <span className="text-[10px] text-amber-400/90 font-mono">
+                  ({(activeHunter.customMoves || []).length})
+                </span>
+                {isCustomMovesExpanded ? (
+                  <ChevronUp className="w-3 h-3 text-neutral-400" />
+                ) : (
+                  <ChevronDown className="w-3 h-3 text-neutral-400" />
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  setCustomMoveId(null);
+                  setCustomMoveName('');
+                  setCustomMoveStat('none');
+                  setCustomMoveDesc('');
+                  setIsCustomMoveModalOpen(true);
+                }}
+                className="px-2 py-0.5 rounded bg-amber-600/30 hover:bg-amber-500 hover:text-neutral-950 text-amber-300 font-semibold text-[10px] border border-amber-500/50 flex items-center gap-1 cursor-pointer transition-colors"
+                title="Add Custom Move"
+              >
+                <Plus className="w-3 h-3" />
+                <span>Add Custom Move</span>
+              </button>
+            </div>
+
+            {isCustomMovesExpanded && (
+              <div>
+                {(!activeHunter.customMoves || activeHunter.customMoves.length === 0) ? (
+                  <div className="p-3 rounded bg-neutral-950/60 border border-neutral-800/80 text-center text-neutral-400 text-xs">
+                    <p className="italic">No custom moves created yet.</p>
+                    <p className="text-[11px] text-neutral-500 mt-0.5">
+                      Collaborate with your Keeper to forge unique relics, spells, or narrative abilities.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    {activeHunter.customMoves.map((cm) => {
+                      const moveStat =
+                        cm.stat && cm.stat !== 'none'
+                          ? (cm.stat as StatType)
+                          : detectStatFromMove(undefined, cm.name, cm.description);
+
+                      return (
+                        <div
+                          key={cm.id}
+                          className="p-2 rounded border bg-neutral-950/80 border-purple-900/40 hover:border-purple-600/50 text-neutral-200 text-xs space-y-1 transition-colors"
+                        >
+                          <div className="flex items-center justify-between gap-1 flex-wrap">
+                            <div className="flex items-center gap-1.5 font-bold flex-wrap">
+                              <span className="text-purple-200">{cm.name}</span>
+                              {moveStat && (
+                                <span className="text-[9px] px-1 rounded bg-neutral-800 text-amber-400 uppercase font-mono">
+                                  +{moveStat}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                onClick={() => onQuickRoll(moveStat, cm.name)}
+                                title={`Roll ${cm.name} ${moveStat ? `(+${moveStat})` : ''}`}
+                                className="text-[10px] px-2 py-0.5 rounded bg-amber-600/30 hover:bg-amber-500 hover:text-neutral-950 text-amber-300 font-bold cursor-pointer border border-amber-500/50 flex items-center gap-1 shrink-0 shadow-xs transition-colors"
+                              >
+                                <Dices className="w-3 h-3" />
+                                <span>Roll</span>
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setCustomMoveId(cm.id);
+                                  setCustomMoveName(cm.name);
+                                  setCustomMoveStat(cm.stat || 'none');
+                                  setCustomMoveDesc(cm.description);
+                                  setIsCustomMoveModalOpen(true);
+                                }}
+                                title="Edit Custom Move"
+                                className="p-1 rounded text-neutral-400 hover:text-amber-300 hover:bg-neutral-800 cursor-pointer text-xs"
+                              >
+                                ✏️
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const updated = (activeHunter.customMoves || []).filter(
+                                    (m) => m.id !== cm.id
+                                  );
+                                  onUpdateHunter({ ...activeHunter, customMoves: updated });
+                                }}
+                                title="Delete Custom Move"
+                                className="p-1 rounded text-neutral-500 hover:text-red-400 hover:bg-neutral-800 cursor-pointer"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <p className="text-[11px] text-neutral-300 whitespace-pre-line leading-relaxed">
+                            {cm.description}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Gear & Weapons Area */}
           <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-2.5 space-y-1.5 shadow-xs">
             <div className="flex items-center justify-between text-xs font-bold text-neutral-200">
@@ -867,7 +1332,7 @@ export const HunterTab: React.FC<HunterTabProps> = ({
       {/* LEVEL UP MODAL */}
       {isLevelUpModalOpen && activeHunter && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-xs flex items-center justify-center p-3">
-          <div className="bg-neutral-900 border border-amber-500 rounded-xl p-3.5 w-full max-w-sm space-y-3 shadow-2xl text-xs max-h-[90vh] overflow-y-auto">
+          <div className="bg-neutral-900 border border-amber-500 rounded-xl p-3.5 w-full max-w-md space-y-3 shadow-2xl text-xs max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
               <div className="flex items-center gap-1.5 text-amber-300 font-bold text-sm">
                 <Award className="w-4 h-4 text-amber-400" />
@@ -882,10 +1347,14 @@ export const HunterTab: React.FC<HunterTabProps> = ({
             </div>
 
             <p className="text-neutral-300 text-xs">
-              Select an improvement for <strong>{activeHunter.name}</strong>. Choosing an improvement clears 5 experience marks.
+              Select an improvement for <strong>{activeHunter.name}</strong>. Choosing an improvement clears the 5 experience marks and increments your Level Up count (currently {activeHunter.levelUpCount || 0}).
             </p>
 
+            {/* Standard Playbook Improvements */}
             <div className="space-y-1.5">
+              <div className="text-[11px] font-bold text-neutral-400 uppercase tracking-wide">
+                Standard Playbook Improvements
+              </div>
               {selectedPlaybookDef.improvements.map((imp, idx) => (
                 <button
                   key={idx}
@@ -896,6 +1365,256 @@ export const HunterTab: React.FC<HunterTabProps> = ({
                 </button>
               ))}
             </div>
+
+            {/* Advanced Improvements Section */}
+            {(activeHunter.levelUpCount || 0) >= 5 ? (
+              <div className="pt-2 border-t border-amber-500/40 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
+                    <span>⭐ Advanced Improvements</span>
+                  </span>
+                  <span className="text-[10px] text-amber-400/80 font-mono">
+                    Unlocked ({activeHunter.levelUpCount || 0}/5 Level Ups)
+                  </span>
+                </div>
+                <p className="text-[11px] text-neutral-400">
+                  Veterans of the hunt may choose from the advanced list below:
+                </p>
+                <div className="space-y-1.5">
+                  {ADVANCED_IMPROVEMENTS.map((adv, idx) => (
+                    <button
+                      key={`adv-${idx}`}
+                      onClick={() => handleSelectImprovement(adv)}
+                      className="w-full text-left p-2 rounded bg-amber-950/30 hover:bg-amber-500/20 text-amber-100 hover:text-amber-200 border border-amber-600/40 hover:border-amber-400 transition-colors cursor-pointer font-medium"
+                    >
+                      ⭐ {adv}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="pt-2 border-t border-neutral-800 p-2 rounded bg-neutral-950/60 text-neutral-500 text-[11px] flex items-center justify-between">
+                <span className="font-semibold text-neutral-400">⭐ Advanced Improvements</span>
+                <span className="font-mono">
+                  Unlocks at 5 Level Ups ({5 - (activeHunter.levelUpCount || 0)} more needed)
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* BORROW PLAYBOOK MOVE MODAL */}
+      {isBorrowMoveModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-xs flex items-center justify-center p-3">
+          <div className="bg-neutral-900 border border-amber-500/80 rounded-xl p-3.5 w-full max-w-lg space-y-3 shadow-2xl text-xs max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-2 shrink-0">
+              <div className="flex items-center gap-1.5 text-amber-300 font-bold text-sm">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                <span>Borrow Move from Another Playbook</span>
+              </div>
+              <button
+                onClick={() => {
+                  setIsBorrowMoveModalOpen(false);
+                  setSelectedBorrowedMoveId(null);
+                }}
+                className="text-neutral-400 hover:text-white cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Step 1: Select source Playbook */}
+            <div className="space-y-1 shrink-0">
+              <label className="font-bold text-neutral-300 block">
+                Step 1: Select Source Playbook ({otherPlaybooks.length} Available)
+              </label>
+              <select
+                value={effectiveBorrowSourceId}
+                onChange={(e) => {
+                  setBorrowSourcePlaybookId(e.target.value);
+                  setSelectedBorrowedMoveId(null);
+                }}
+                className="w-full bg-neutral-950 border border-neutral-700 rounded p-2 text-amber-300 font-semibold focus:outline-none focus:border-amber-500 text-xs"
+              >
+                {otherPlaybooks.map((pb) => (
+                  <option key={pb.id} value={pb.id}>
+                    {pb.name} — {pb.tagline}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Step 2: Browse and pick any move */}
+            <div className="space-y-1.5 flex-1 min-h-0 flex flex-col">
+              <label className="font-bold text-neutral-300 block shrink-0">
+                Step 2: Choose a Move from {borrowSourcePlaybookDef.name}
+              </label>
+              <div className="overflow-y-auto space-y-1.5 pr-1 flex-1 border border-neutral-800 rounded p-2 bg-neutral-950/60 max-h-72">
+                {borrowSourcePlaybookDef.moves.map((m) => {
+                  const isPicked = selectedBorrowedMoveId === m.id;
+                  const alreadyBorrowed = (activeHunter?.borrowedMoves || []).some(
+                    (bm) => bm.id === m.id
+                  );
+                  const moveStat =
+                    m.stat || detectStatFromMove(undefined, m.name, m.description);
+
+                  return (
+                    <div
+                      key={m.id}
+                      onClick={() => {
+                        if (!alreadyBorrowed) {
+                          setSelectedBorrowedMoveId(m.id);
+                        }
+                      }}
+                      className={`p-2 rounded border transition-colors cursor-pointer text-xs space-y-1 ${
+                        alreadyBorrowed
+                          ? 'opacity-40 bg-neutral-950 border-neutral-800 cursor-not-allowed'
+                          : isPicked
+                          ? 'bg-amber-950/50 border-amber-400 text-amber-100 shadow-xs'
+                          : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:border-neutral-700'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 font-bold">
+                          <span className={isPicked ? 'text-amber-300' : 'text-neutral-200'}>
+                            {m.name}
+                          </span>
+                          {moveStat && (
+                            <span className="text-[9px] px-1 rounded bg-neutral-800 text-amber-400 uppercase font-mono">
+                              +{moveStat}
+                            </span>
+                          )}
+                        </div>
+                        {alreadyBorrowed ? (
+                          <span className="text-[10px] text-neutral-500 font-mono">
+                            Already Borrowed
+                          </span>
+                        ) : isPicked ? (
+                          <span className="text-[10px] text-amber-400 font-bold">✓ Selected</span>
+                        ) : null}
+                      </div>
+                      <p className="text-[11px] text-neutral-400 leading-relaxed">
+                        {m.description}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Step 3: Action Buttons */}
+            <div className="flex items-center justify-between pt-2 border-t border-neutral-800 shrink-0">
+              <span className="text-[11px] text-neutral-400">
+                {selectedMoveToBorrow
+                  ? `Selected: ${selectedMoveToBorrow.name}`
+                  : 'Select a move above'}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsBorrowMoveModalOpen(false);
+                    setSelectedBorrowedMoveId(null);
+                  }}
+                  className="px-3 py-1.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!selectedMoveToBorrow}
+                  onClick={handleAddBorrowedMove}
+                  className="px-3.5 py-1.5 rounded bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-neutral-950 font-bold cursor-pointer transition-colors"
+                >
+                  Add Move to Hunter
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CUSTOM MOVE MODAL */}
+      {isCustomMoveModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-xs flex items-center justify-center p-3">
+          <div className="bg-neutral-900 border border-purple-500/80 rounded-xl p-3.5 w-full max-w-md space-y-3 shadow-2xl text-xs max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
+              <h3 className="font-bold text-sm text-purple-300 flex items-center gap-1.5">
+                <Crown className="w-4 h-4 text-purple-400" />
+                <span>{customMoveId ? 'Edit Custom Move' : 'Create Custom Move'}</span>
+              </h3>
+              <button
+                onClick={() => {
+                  setIsCustomMoveModalOpen(false);
+                  setCustomMoveId(null);
+                }}
+                className="text-neutral-400 hover:text-white cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCustomMove} className="space-y-3">
+              <div>
+                <label className="font-bold text-neutral-300 block mb-1">Move Name</label>
+                <input
+                  type="text"
+                  required
+                  value={customMoveName}
+                  onChange={(e) => setCustomMoveName(e.target.value)}
+                  placeholder="e.g. Arcane Conduit, Bargain with Shadow, Ghost Touch"
+                  className="w-full bg-neutral-950 border border-neutral-700 rounded p-2 text-neutral-200 focus:outline-none focus:border-purple-500 text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-neutral-300 block mb-1">Associated Rating</label>
+                <select
+                  value={customMoveStat}
+                  onChange={(e) => setCustomMoveStat(e.target.value)}
+                  className="w-full bg-neutral-950 border border-neutral-700 rounded p-2 text-neutral-200 focus:outline-none focus:border-purple-500 text-xs"
+                >
+                  <option value="none">None (No modifier / Flat roll)</option>
+                  <option value="charm">+Charm</option>
+                  <option value="cool">+Cool</option>
+                  <option value="sharp">+Sharp</option>
+                  <option value="tough">+Tough</option>
+                  <option value="weird">+Weird</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-neutral-300 block mb-1">Move Description & Triggers</label>
+                <textarea
+                  required
+                  rows={5}
+                  value={customMoveDesc}
+                  onChange={(e) => setCustomMoveDesc(e.target.value)}
+                  placeholder="When you [trigger], roll +[Rating]...&#10;On a 10+, ...&#10;On a 7-9, ...&#10;On a miss, ..."
+                  className="w-full bg-neutral-950 border border-neutral-700 rounded p-2 text-neutral-200 placeholder-neutral-600 focus:outline-none focus:border-purple-500 text-xs leading-relaxed"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCustomMoveModalOpen(false);
+                    setCustomMoveId(null);
+                  }}
+                  className="px-3 py-1.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-3.5 py-1.5 rounded bg-purple-600 hover:bg-purple-500 text-white font-bold cursor-pointer"
+                >
+                  {customMoveId ? 'Save Changes' : 'Add Move'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

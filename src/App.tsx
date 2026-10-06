@@ -48,6 +48,10 @@ const SEED_HUNTER: HunterProfile = {
   gear: 'Shotgun (3-harm close reload messy)\nSilver hunting dagger\nOld occult library cards',
   luckSpecial: PLAYBOOKS[1].luckSpecial,
   improvementsTaken: [],
+  levelUpCount: 0,
+  advancementsTaken: [],
+  borrowedMoves: [],
+  customMoves: [],
   createdAt: Date.now() - 86400000,
 };
 
@@ -131,6 +135,9 @@ export default function App() {
   const activeHunter =
     allHunters.find((h) => h.id === activeHunterId) || allHunters[0] || null;
 
+  // Deletion Tombstone Guard: stores hunterId -> expiry timestamp (1000ms)
+  const deletedTombstoneRef = useRef<Map<string, number>>(new Map());
+
   // Debounce timers for room metadata writes (400ms debounce to prevent race conditions)
   const debounceTimersRef = useRef<Record<string, any>>({});
 
@@ -182,7 +189,13 @@ export default function App() {
           const metadata = await OBR.room.getMetadata();
 
           if (metadata[METADATA_HUNTERS]) {
-            setAllHunters(metadata[METADATA_HUNTERS] as HunterProfile[]);
+            const incoming = metadata[METADATA_HUNTERS] as HunterProfile[];
+            const now = Date.now();
+            const guarded = incoming.filter((h) => {
+              const expiry = deletedTombstoneRef.current.get(h.id);
+              return !expiry || now > expiry;
+            });
+            setAllHunters(guarded);
           }
           if (metadata[METADATA_ROLL_FEED]) {
             setRollFeed(metadata[METADATA_ROLL_FEED] as RollResult[]);
@@ -197,7 +210,13 @@ export default function App() {
           // Subscribe to live room metadata updates
           OBR.room.onMetadataChange((updatedMetadata) => {
             if (updatedMetadata[METADATA_HUNTERS] !== undefined) {
-              setAllHunters((updatedMetadata[METADATA_HUNTERS] as HunterProfile[]) || []);
+              const incoming = (updatedMetadata[METADATA_HUNTERS] as HunterProfile[]) || [];
+              const now = Date.now();
+              const guarded = incoming.filter((h) => {
+                const expiry = deletedTombstoneRef.current.get(h.id);
+                return !expiry || now > expiry;
+              });
+              setAllHunters(guarded);
             }
             if (updatedMetadata[METADATA_ROLL_FEED] !== undefined) {
               setRollFeed((updatedMetadata[METADATA_ROLL_FEED] as RollResult[]) || []);
@@ -314,6 +333,12 @@ export default function App() {
   };
 
   const handleDeleteHunter = (hunterId: string) => {
+    // Register tombstone for 1000ms to prevent room broadcasts from resurrecting the sheet
+    deletedTombstoneRef.current.set(hunterId, Date.now() + 1000);
+    setTimeout(() => {
+      deletedTombstoneRef.current.delete(hunterId);
+    }, 1000);
+
     const nextHunters = allHunters.filter((h) => h.id !== hunterId);
     setAllHunters(nextHunters);
     if (activeHunterId === hunterId) {

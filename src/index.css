@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+@theme {
+  --color-neutral-850: #1b1b1f;
+}
+
 @layer base {
   * {
     box-sizing: border-box;

@@ -26,7 +26,10 @@ export function detectStatFromMove(
 /**
  * Lookup move details from Basic moves, Weird moves, and Playbook moves
  */
-export function findMoveDetails(moveNameOrId: string): {
+export function findMoveDetails(
+  moveNameOrId: string,
+  hunter?: HunterProfile | null
+): {
   id?: string;
   name: string;
   stat?: StatType;
@@ -51,6 +54,52 @@ export function findMoveDetails(moveNameOrId: string): {
     (m) => m.name.toLowerCase() === query || m.id.toLowerCase() === query
   );
   if (weird) return weird;
+
+  // Search Hunter Borrowed Moves
+  if (hunter?.borrowedMoves) {
+    const borrowed = hunter.borrowedMoves.find(
+      (m) => m.name.toLowerCase() === query || m.id.toLowerCase() === query
+    );
+    if (borrowed) {
+      const stat = detectStatFromMove(
+        typeof borrowed.stat === 'string' && ['charm', 'cool', 'sharp', 'tough', 'weird'].includes(borrowed.stat)
+          ? (borrowed.stat as StatType)
+          : undefined,
+        borrowed.name,
+        borrowed.description
+      );
+      return {
+        id: borrowed.id,
+        name: borrowed.name,
+        stat,
+        description: borrowed.description,
+        trigger: borrowed.description,
+      };
+    }
+  }
+
+  // Search Hunter Custom Moves
+  if (hunter?.customMoves) {
+    const custom = hunter.customMoves.find(
+      (m) => m.name.toLowerCase() === query || m.id.toLowerCase() === query
+    );
+    if (custom) {
+      const stat = detectStatFromMove(
+        typeof custom.stat === 'string' && ['charm', 'cool', 'sharp', 'tough', 'weird'].includes(custom.stat)
+          ? (custom.stat as StatType)
+          : undefined,
+        custom.name,
+        custom.description
+      );
+      return {
+        id: custom.id,
+        name: custom.name,
+        stat,
+        description: custom.description,
+        trigger: custom.description,
+      };
+    }
+  }
 
   // Search across playbooks
   for (const playbook of PLAYBOOKS) {
@@ -202,7 +251,7 @@ export function executePbtaRoll({
   const total = d1 + d2 + totalMod;
   const tier = calculateTier(total);
 
-  const moveDetails = findMoveDetails(moveName);
+  const moveDetails = findMoveDetails(moveName, hunter);
   const outcomeText = getOutcomeTextForMove(tier, moveDetails);
 
   const statTag = stat ? ` (+${stat.charAt(0).toUpperCase() + stat.slice(1)})` : '';

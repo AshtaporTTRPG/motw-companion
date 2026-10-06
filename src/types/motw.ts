@@ -89,6 +89,21 @@ export interface PlaybookSubFeatures {
   genericChecklist?: string[];
 }
 
+export interface BorrowedMove {
+  id: string;
+  name: string;
+  playbookName: string;
+  description: string;
+  stat?: StatType | string;
+}
+
+export interface CustomMove {
+  id: string;
+  name: string;
+  stat?: StatType | string;
+  description: string;
+}
+
 export interface HunterProfile {
   id: string;
   ownerId: string;
@@ -105,9 +120,15 @@ export interface HunterProfile {
   gear: string;
   luckSpecial: string;
   improvementsTaken: string[];
+  levelUpCount?: number;
+  advancementsTaken?: string[];
+  borrowedMoves?: BorrowedMove[];
+  customMoves?: CustomMove[];
   subFeatures?: PlaybookSubFeatures;
   createdAt: number;
 }
+
+export type Hunter = HunterProfile;
 
 export interface MotWMove {
   id: string;

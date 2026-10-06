@@ -13,34 +13,50 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
       { charm: -1, cool: 2, sharp: 1, tough: 2, weird: -1 },
       { charm: 1, cool: 2, sharp: 1, tough: 1, weird: -1 },
       { charm: -1, cool: 1, sharp: 2, tough: -1, weird: 2 },
-      { charm: 1, cool: 1, sharp: 0, tough: 1, weird: 2 },
+      { charm: 1, cool: 2, sharp: -1, tough: -1, weird: 2 },
     ],
     moves: [
       {
         id: 'chosen-destiny',
         name: 'Destiny’s Plaything',
-        description: 'At the beginning of each mystery, roll +Weird. On 10+, the Keeper reveals a useful vision or omen. On 7-9, you get a vague, disturbing glimpse.',
+        description: 'At the beginning of each mystery, roll +Weird. On a 10+, the Keeper will reveal a useful detail about the coming mystery. On a 7-9, you get a vague hint or disturbing omen. On a miss, you get a vision of something terrible happening to you or someone you care about.',
         stat: 'weird',
       },
       {
         id: 'chosen-i-am-the-weapon',
         name: 'I Am The Weapon',
-        description: 'Your chosen weapon inflicts +1 harm and gains the messy tag.',
+        description: 'You increase the harm of your chosen destiny weapon by +1, and it gains the messy tag.',
       },
       {
-        id: 'chosen-resilient',
-        name: 'Resilient',
-        description: 'You heal from injuries twice as fast as an ordinary mortal. Once per mystery, clear 2 harm immediately.',
+        id: 'chosen-here-for-a-reason',
+        name: 'I’m Here For A Reason',
+        description: 'There’s something you are meant to do. What is it? As long as you are working towards that goal, you cannot die. If you die in play, spend a point of Luck to recover or be returned to life somehow. Once your task is done (or you run out of Luck), this protection ceases.',
+      },
+      {
+        id: 'chosen-the-big-entrance',
+        name: 'The Big Entrance',
+        description: 'When you make a showy entrance into a dangerous situation, roll +Cool. On a 10+, everyone stops to watch and listen until you finish your opening speech. On a 7-9, one person or monster stops to watch and listen. On a miss, you are marked as the biggest threat by everyone present.',
+        stat: 'cool',
       },
       {
         id: 'chosen-devastating',
         name: 'Devastating Attack',
-        description: 'When you inflict harm on a monster, you can inflict +1 harm, but you suffer 1 harm in recoil or vulnerability.',
+        description: 'When you inflict harm on an enemy, you can choose to inflict +1 harm, but you suffer 1-harm yourself in recoil or exposure.',
       },
       {
-        id: 'chosen-protective-aura',
-        name: 'Protective Aura',
-        description: 'You gain +1 armor against all supernatural and monstrous attacks.',
+        id: 'chosen-dutiful',
+        name: 'Dutiful',
+        description: 'When your fate rears its ugly head and you act in accordance with any of your fate tags (heroic or doom), mark experience. If it is a heroic tag, take +1 forward as well.',
+      },
+      {
+        id: 'chosen-invincible',
+        name: 'Invincible',
+        description: 'You always count as having 2-armor. This does not stack with other protection.',
+      },
+      {
+        id: 'chosen-resilience',
+        name: 'Resilience',
+        description: 'You heal faster than normal people. Any time your harm is healed, heal an extra 1 point. Additionally, your wounds count as 1-harm less for the purpose of the Keeper’s harm moves.',
       },
     ],
     improvements: [
@@ -77,28 +93,40 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
       {
         id: 'expert-i-have-read-about-this',
         name: 'I’ve Read About A Beast Like That',
-        description: 'When you first encounter a monster, you may ask the Keeper what its true weakness or vulnerability is.',
+        description: 'When you first encounter a monster, you may ask the Keeper one question from the Investigate a Mystery list about it: what is it, what can it do, or what is its weakness?',
       },
       {
-        id: 'expert-haven',
-        name: 'The Haven',
-        description: 'You have a secret library/workshop haven with occult archives and arcane defense wards.',
+        id: 'expert-often-right',
+        name: 'Often Right',
+        description: 'When a hunter comes to you for advice, tell them what you honestly think the best course is. If that hunter follows your advice, they take +1 on any moves they make doing so, and you mark experience that mystery the first time it happens.',
       },
       {
         id: 'expert-preparedness',
         name: 'Preparedness',
-        description: 'When you need a specific piece of esoteric or hunting gear, roll +Sharp. On 10+, you happen to have it on you. On 7-9, you have something close or slightly compromised.',
+        description: 'When you need something unusual or rare, roll +Sharp. On a 10+, you have it right now. On a 7-9, you have it, but it will take a little while to get it out, or it’s not quite what you wanted. On a miss, you know where to find it, but it’s somewhere dangerous.',
         stat: 'sharp',
       },
       {
-        id: 'expert-often-overlooked',
-        name: 'Often Overlooked',
-        description: 'When you act under pressure to stay out of sight or avoid notice while taking notes, take +1 to the roll.',
+        id: 'expert-haven',
+        name: 'The Haven',
+        description: 'You have set up a haven—a safe place to work, research, and recuperate with your chosen tags (lore library, mystical library, armory, etc.).',
+      },
+      {
+        id: 'expert-it-wasnt-as-big',
+        name: 'It Wasn’t As Big As That First Time',
+        description: 'You gain 1-armor against monster attacks.',
       },
       {
         id: 'expert-dark-past',
         name: 'Dark Past',
-        description: 'You can converse fluently with demons, fae, or cryptids without them immediately attacking on sight.',
+        description: 'You used to be in deep with some bad crowd or forbidden occult circle. When you deal with a monster or cultist, roll +Charm. On a 10+, they recognize you and are friendly or intimidated. On a 7-9, they know you, but there’s bad blood or debts to settle. On a miss, your past catches up to you hard.',
+        stat: 'charm',
+      },
+      {
+        id: 'expert-beast-breaker',
+        name: 'Beast Breaker',
+        description: 'When you kick some ass against a monster whose weakness you have discovered, roll +Sharp instead of +Tough. On a 10+, deal harm with +1 bonus harm. On a 7-9, deal harm as normal. On a miss, the monster turns the tables.',
+        stat: 'sharp',
       },
     ],
     improvements: [
@@ -126,37 +154,75 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
     luckSpecial: 'When you spend a point of Luck, your dark monstrous side comes closer to breaking free, terrifying human onlookers or demanding tribute.',
     statOptions: [
       { charm: -1, cool: -1, sharp: 0, tough: 2, weird: 3 },
-      { charm: -1, cool: 1, sharp: 1, tough: 0, weird: 2 },
+      { charm: -1, cool: 1, sharp: 1, tough: 0, weird: 3 },
       { charm: 2, cool: 0, sharp: -1, tough: -1, weird: 3 },
-      { charm: -2, cool: 2, sharp: 0, tough: 1, weird: 2 },
+      { charm: -2, cool: 2, sharp: 0, tough: 0, weird: 3 },
       { charm: 0, cool: -1, sharp: 2, tough: -1, weird: 3 },
     ],
     moves: [
       {
+        id: 'monstrous-immortal',
+        name: 'Immortal',
+        description: 'Do not age or sicken, suffer 1-harm less whenever you take harm.',
+      },
+      {
+        id: 'monstrous-unnatural-appeal',
+        name: 'Unnatural Appeal',
+        description: 'Roll +Weird instead of +Charm when you manipulate someone.',
+        stat: 'weird',
+      },
+      {
         id: 'monstrous-unholy-strength',
         name: 'Unholy Strength',
-        description: 'Your natural unarmed strikes inflict 2-harm hand messy heavy. You can lift and tear steel barriers effortlessly.',
+        description: 'Roll +Weird instead of +Tough when you kick some ass.',
+        stat: 'weird',
       },
       {
-        id: 'monstrous-immortal-flesh',
-        name: 'Immortal Flesh',
-        description: 'You gain natural 1-armor against mundane physical attacks. Normal diseases and toxins have no effect on you.',
+        id: 'monstrous-incorporeal',
+        name: 'Incorporeal',
+        description: 'Move freely through solid objects (not people).',
       },
       {
-        id: 'monstrous-claws-fangs',
+        id: 'monstrous-preternatural-speed',
+        name: 'Preternatural Speed',
+        description: 'Faster than normal. Take +1 ongoing when chasing, fleeing, or running.',
+      },
+      {
+        id: 'monstrous-claws-of-the-beast',
         name: 'Claws of the Beast',
-        description: 'Your attacks gain the messy and penetrating tags. On a 10+ Kick Some Ass, you may drain health to clear 1 harm.',
+        description: 'All natural attacks get +1 harm.',
+      },
+      {
+        id: 'monstrous-mental-dominion',
+        name: 'Mental Dominion',
+        description: 'When you gaze into human eyes to give orders, roll +Charm. On a 10+, hold 3. On a 7-9, hold 1. Spend your hold 1-for-1 to give them orders they must follow. On a miss, they break free and realize you tried to control them.',
+        stat: 'charm',
+      },
+      {
+        id: 'monstrous-unquenchable-vitality',
+        name: 'Unquenchable Vitality',
+        description: 'When you draw upon supernatural resilience to self-heal, roll +Cool. On a 10+, heal 2 harm and stabilize your wounds. On a 7-9, heal 1 harm and stabilize your wounds. On a miss, your body rejects the repair, suffering 1-harm.',
+        stat: 'cool',
+      },
+      {
+        id: 'monstrous-dark-negotiator',
+        name: 'Dark Negotiator',
+        description: 'Manipulate monsters if they can reason and talk.',
+      },
+      {
+        id: 'monstrous-flight',
+        name: 'Flight',
+        description: 'You can fly.',
       },
       {
         id: 'monstrous-shapeshifter',
         name: 'Shapeshifter',
-        description: 'You can change into an animal or predatory mist form. In animal form you gain heightened senses (+1 Sharp).',
+        description: 'Change forms (animals). Gain +1 to investigate a mystery with animal senses.',
       },
       {
-        id: 'monstrous-mental-domination',
-        name: 'Mental Domination',
-        description: 'When you look into someone’s eyes and roll +Charm, on a 10+ they are mesmerized and must answer one command.',
-        stat: 'charm',
+        id: 'monstrous-something-borrowed',
+        name: 'Something Borrowed',
+        description: 'Take a move from another hunter playbook not in play.',
       },
     ],
     improvements: [
@@ -164,8 +230,8 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
       'Get +1 Tough (max +2)',
       'Get +1 Charm (max +2)',
       'Take another Monstrous move',
+      'Take another Monstrous move',
       'Take a move from another playbook',
-      'Master your monstrous curse or hunger',
       'Gain a pack or coven of followers',
     ],
     gearChoices: [
@@ -185,35 +251,55 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
       { charm: 0, cool: 2, sharp: -1, tough: 2, weird: -1 },
       { charm: -1, cool: 2, sharp: 1, tough: 1, weird: -1 },
       { charm: 1, cool: 2, sharp: 1, tough: -1, weird: -1 },
-      { charm: -1, cool: 2, sharp: 1, tough: 2, weird: -2 },
+      { charm: -1, cool: 2, sharp: 1, tough: 0, weird: 1 },
       { charm: 0, cool: 2, sharp: 2, tough: -1, weird: -1 },
     ],
     moves: [
       {
-        id: 'pro-agency-backup',
-        name: 'Agency Support',
-        description: 'You have access to the Agency’s arsenal, covert transport, secure safehouses, and laboratory testing forensics.',
+        id: 'pro-deal-with-the-agency',
+        name: 'Deal With The Agency',
+        description: 'When you need something from the Agency (gear, backup, clearance, resources), roll +Sharp. On a 10+, you get it without question. On a 7-9, you get it, but there are strings attached (oversight, delay, or an annoying supervisor). On a miss, your request is denied and the Agency questions your competence.',
+        stat: 'sharp',
       },
       {
         id: 'pro-tactical-genius',
         name: 'Tactical Genius',
-        description: 'When you Read a Bad Situation, you may roll +Cool instead of +Sharp, and gain +2 forward instead of +1.',
+        description: 'When you Read a Bad Situation, you may roll +Cool instead of +Sharp.',
         stat: 'cool',
       },
       {
-        id: 'pro-unflinching',
-        name: 'Unflinching Discipline',
-        description: 'You gain +1 armor against psychic attacks, fear effects, and unnatural terror.',
-      },
-      {
-        id: 'pro-leave-no-man-behind',
-        name: 'Leave No One Behind',
-        description: 'When you Protect Someone, you always protect them completely without suffering harm on a 10+.',
-      },
-      {
         id: 'pro-medic',
-        name: 'Field Medic',
-        description: 'You can stabilize and heal 2 harm instead of 1 when administering first aid with a military kit.',
+        name: 'Medic',
+        description: 'When you treat someone with medical gear, roll +Cool. On a 10+, heal 2-harm and stabilize them. On a 7-9, heal 1-harm and stabilize them. On a miss, complications arise (infection, hemorrhaging, or worse).',
+        stat: 'cool',
+      },
+      {
+        id: 'pro-leave-no-one-behind',
+        name: 'Leave No One Behind',
+        description: 'In combat, when you help someone escape or carry a fallen teammate to safety, roll +Cool. On a 10+, you both get away clean. On a 7-9, you get them out, but you take harm or get separated. On a miss, you both end up trapped.',
+        stat: 'cool',
+      },
+      {
+        id: 'pro-bottle-it-up',
+        name: 'Bottle It Up',
+        description: 'When you want to resist a mental influence, horror, or fear, roll +Cool. On a 10+, you steel yourself completely and take +1 forward. On a 7-9, you hold it together for now, but suffer -1 forward on your next move. On a miss, the terror or trauma overwhelms you.',
+        stat: 'cool',
+      },
+      {
+        id: 'pro-battlefield-awareness',
+        name: 'Battlefield Awareness',
+        description: 'You always know the tactical layout of any battlefield you enter. Take +1 armor when fighting in terrain you have had time to scout or prepare.',
+      },
+      {
+        id: 'pro-unfazed',
+        name: 'Unfazed',
+        description: 'When you act under pressure in extreme life-or-death situations, you cannot roll worse than a 7-9 result.',
+      },
+      {
+        id: 'pro-mob',
+        name: 'Mob',
+        description: 'When you order your squad into combat or to hold a perimeter, roll +Charm. On a 10+, they perform the mission effectively. On a 7-9, they succeed with casualties or complications. On a miss, the squad is decimated or compromises the mission.',
+        stat: 'charm',
       },
     ],
     improvements: [
@@ -247,31 +333,44 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
     ],
     moves: [
       {
-        id: 'spooky-telepathy',
-        name: 'Telepathy',
-        description: 'You can read surface thoughts of humans and monsters. Roll +Weird on contact for deeper secrets.',
-        stat: 'weird',
-      },
-      {
-        id: 'spooky-spooky-aura',
+        id: 'spooky-the-sight',
         name: 'The Sight',
-        description: 'You automatically sense when magic is cast or when a supernatural creature enters the room.',
-      },
-      {
-        id: 'spooky-hex',
-        name: 'Jinx',
-        description: 'When you curse someone, roll +Weird. On 10+, choose two: they trip, jam a weapon, drop something, or misjudge an attack.',
+        description: 'You can see the invisible, spirits, magical auras, and psychic residues. When you open your mind and gaze upon a place or person with the Sight, roll +Weird. On a 10+, ask the Keeper 3 questions: What happened here recently? What supernatural presence is near? What are its intentions? On a 7-9, ask 1 question. On a miss, you catch the eye of something terrifying in the unseen realm.',
         stat: 'weird',
       },
       {
-        id: 'spooky-tether',
-        name: 'Psychic Tether',
-        description: 'You can telepathically speak with any ally whose name you know, anywhere in the town.',
+        id: 'spooky-premonitions',
+        name: 'Premonitions',
+        description: 'At the start of each mystery, roll +Weird. On a 10+, the Keeper gives you a detailed vision of a bad thing that hasn’t happened yet; if you act to prevent it, take +1 forward. On a 7-9, you get cloudy visions and cryptic warnings. On a miss, you have a nightmarish vision of your own doom; take -1 forward.',
+        stat: 'weird',
       },
       {
-        id: 'spooky-dark-shield',
-        name: 'Aegis of Shadows',
-        description: 'You summon a shield of kinetic force or shadow granting 2-armor against one incoming attack.',
+        id: 'spooky-hunches',
+        name: 'Hunches',
+        description: 'When something bad is about to happen, the Keeper will give you a hunch or warning. You can act immediately or ask "What is about to happen?" to take +1 forward to react.',
+      },
+      {
+        id: 'spooky-telekinesis',
+        name: 'Telekinesis',
+        description: 'You can move objects with your mind. Roll +Weird. On a 10+, move an object up to the size of a car, or fling an object for 2-harm close/far, or pin someone in place. On a 7-9, you manage it, but take 1-harm (ignore armor) from psychic strain or suffer extreme fatigue. On a miss, your power lashes out uncontrollably.',
+        stat: 'weird',
+      },
+      {
+        id: 'spooky-jinx',
+        name: 'Jinx',
+        description: 'When you jinx a target with bad luck, roll +Weird. On a 10+, hold 2. On a 7-9, hold 1. Spend hold 1-for-1 to cause: a weapon jams or breaks; an enemy trips, slips, or drops something; an environmental accident deals 2-harm to them. On a miss, bad luck strikes you or your nearest friend.',
+        stat: 'weird',
+      },
+      {
+        id: 'spooky-tune-in',
+        name: 'Tune In',
+        description: 'When you attune your mind to a monster or minion, roll +Weird. On a 10+, hold 3. On a 7-9, hold 1. Spend hold to ask the Keeper: Where is it right now? What is it planning? What is its current emotion/need? Who is it targeting? On a miss, the creature senses your probe and knows where you are.',
+        stat: 'weird',
+      },
+      {
+        id: 'spooky-darker-sort-of-hunter',
+        name: 'The Darker Sort of Hunter',
+        description: 'Whenever you use magic or a Spooky move, you may choose to invoke your Dark Side. If you do, gain +1 to the roll, but the Keeper will give you a dark urge or temptation that you must satisfy.',
       },
     ],
     improvements: [
@@ -297,38 +396,48 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
     description: 'A relentless avenger who survived a tragedy and hunts monsters with fury.',
     luckSpecial: 'When you spend a point of Luck, you discover that someone you trusted was complicit in the monster attack that destroyed your past.',
     statOptions: [
-      { charm: -1, cool: 1, sharp: 0, tough: 2, weird: 1 },
-      { charm: 0, cool: -1, sharp: 1, tough: 2, weird: 1 },
+      { charm: 0, cool: 1, sharp: -1, tough: 2, weird: 1 },
+      { charm: 0, cool: 0, sharp: 1, tough: 2, weird: 0 },
+      { charm: 1, cool: 0, sharp: 1, tough: 2, weird: -1 },
+      { charm: -1, cool: -1, sharp: 0, tough: 2, weird: 2 },
       { charm: 1, cool: 1, sharp: 0, tough: 2, weird: -1 },
-      { charm: -1, cool: -1, sharp: 1, tough: 2, weird: 2 },
-      { charm: 1, cool: 0, sharp: 2, tough: 1, weird: -1 },
     ],
     moves: [
       {
         id: 'wronged-i-know-my-prey',
         name: 'I Know My Prey',
-        description: 'Against the specific monster breed that destroyed your family, you deal +1 harm and ignore 1 point of their armor.',
+        description: 'Choose one breed of monster that destroyed what you loved. You take +1 ongoing whenever you knowingly investigate, pursue, or fight this breed of monster.',
       },
       {
         id: 'wronged-berserk',
-        name: 'Berserk Fury',
-        description: 'No matter how much harm you suffer, you cannot be knocked out or rendered unconscious until the fight ends.',
+        name: 'Berserk',
+        description: 'When you Kick Some Ass against a monster, you may choose to go berserk. If you do, deal +1 harm and take +1 harm from any attacks against you until the fight ends. While berserk, you cannot retreat.',
       },
       {
-        id: 'wronged-relentless',
-        name: 'Relentless Pursuit',
-        description: 'When you track a monster that is fleeing, roll +Tough instead of Sharp. You always catch up to them.',
-        stat: 'tough',
-      },
-      {
-        id: 'wronged-prepared-for-vengeance',
-        name: 'Prepared for Vengeance',
-        description: 'You carry an arsenal custom-tailored against monsters: silver spikes, holy oil, and rock salt rounds.',
+        id: 'wronged-safety-first',
+        name: 'Safety First',
+        description: 'You have reinforced gear, defensive training, or sheer stubbornness: you gain 1-armor against all attacks.',
       },
       {
         id: 'wronged-never-again',
-        name: 'Never Again',
-        description: 'When you protect an innocent bystander, you inflict your weapon damage on the attacker automatically.',
+        name: 'NEVER AGAIN',
+        description: 'In combat, when an innocent bystander or a close ally is in imminent danger of being hurt or killed, you may throw yourself in the way to take the blow. If you do, take the harm instead of them, and your armor is doubled for this hit.',
+      },
+      {
+        id: 'wronged-what-does-not-kill-me',
+        name: 'What Does Not Kill Me...',
+        description: 'When you suffer 4 or more harm from a single attack, take +1 forward on your next move against the attacker.',
+      },
+      {
+        id: 'wronged-fervor',
+        name: 'Fervor',
+        description: 'When you manipulate someone by appealing to their desire for vengeance, justice, or righteous anger, roll +Tough instead of +Charm.',
+        stat: 'tough',
+      },
+      {
+        id: 'wronged-tools-of-the-trade',
+        name: 'Tools of the Trade',
+        description: 'When you use a weapon specifically tailored or forged to exploit a monster’s weakness, it deals +2 harm instead of +1.',
       },
     ],
     improvements: [
@@ -356,37 +465,49 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
     statOptions: [
       { charm: 1, cool: 1, sharp: 2, tough: -1, weird: 0 },
       { charm: 0, cool: 1, sharp: 2, tough: -1, weird: 1 },
-      { charm: 1, cool: -1, sharp: 2, tough: 1, weird: 0 },
-      { charm: 1, cool: -1, sharp: 2, tough: -1, weird: 2 },
+      { charm: 0, cool: -1, sharp: 2, tough: 1, weird: 1 },
+      { charm: 1, cool: -1, sharp: 2, tough: 0, weird: 1 },
       { charm: -1, cool: -1, sharp: 2, tough: 0, weird: 2 },
     ],
     moves: [
       {
         id: 'flake-connect-the-dots',
         name: 'Connect the Dots',
-        description: 'At the start of the mystery, roll +Sharp. On 10+, hold 2. Spend hold to ask the Keeper anything about who is behind this.',
+        description: 'At the beginning of a mystery, you may look for wider patterns. Roll +Sharp. On a 10+, ask the Keeper 3 questions from: How does this tie to the larger conspiracy? What hidden faction is involved? What is being covered up? On a 7-9, ask 1 question. On a miss, you chase a wildly false rabbit hole and take -1 forward.',
         stat: 'sharp',
       },
       {
-        id: 'flake-see-between-the-lines',
-        name: 'See Between the Lines',
-        description: 'When you investigate a mystery via public records, police radios, or the internet, you take +1 forward.',
+        id: 'flake-crazy-eyes',
+        name: 'Crazy Eyes',
+        description: 'You have seen things that shattered your concept of normalcy. You get +1 Weird (to a maximum of +3).',
       },
       {
-        id: 'flake-paranoid-reflexes',
-        name: 'Paranoid Reflexes',
-        description: 'Whenever you get ambushed or surprised, you may immediately act first or dive into cover.',
+        id: 'flake-suspicious-mind',
+        name: 'Suspicious Mind',
+        description: 'You can always tell when someone is lying to you, hiding something, or trying to manipulate you.',
       },
       {
-        id: 'flake-contrarian',
-        name: 'Contrarian',
-        description: 'When someone tells you an official story, roll +Sharp. On 10+, the Keeper must reveal the exact lie.',
+        id: 'flake-see-it-all-fits',
+        name: 'See, It All Fits Together',
+        description: 'When you explain your crazy conspiracy theory to another hunter, roll +Sharp. On a 10+, if they act on your theory, they take +1 ongoing while doing so, and you mark experience. On a 7-9, they take +1 forward. On a miss, your convoluted logic confuses everyone (-1 forward to both).',
         stat: 'sharp',
       },
       {
-        id: 'flake-bug-out-bag',
-        name: 'Bug-Out Bag',
-        description: 'You have a bag containing wiretaps, lockpicks, burner phones, smoke bombs, and a perimeter tripwire.',
+        id: 'flake-often-overlooked',
+        name: 'Often Overlooked',
+        description: 'When you act under pressure to avoid being noticed, hide in plain sight, or slip away from danger, roll +Sharp instead of +Cool.',
+        stat: 'sharp',
+      },
+      {
+        id: 'flake-net-friends',
+        name: 'Net Friends',
+        description: 'You have an underground network of conspiracy theorists, hackers, and occult hobbyists online. When you reach out to them for information, roll +Sharp. On a 10+, they provide exactly what you need quickly and discreetly. On a 7-9, they provide useful info, but it comes with dangerous attention or takes time. On a miss, you accidentally leak your whereabouts to an enemy.',
+        stat: 'sharp',
+      },
+      {
+        id: 'flake-sneaky',
+        name: 'Sneaky',
+        description: 'When you attack an enemy from stealth, ambush, or surprise, you deal +2 harm on your first strike.',
       },
     ],
     improvements: [
@@ -413,37 +534,51 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
     luckSpecial: 'When you spend a point of Luck, your ordinary life crashes into the mystery—a worried family member, boss, or cop shows up at the worst time.',
     statOptions: [
       { charm: 2, cool: 1, sharp: 0, tough: 1, weird: -1 },
-      { charm: 2, cool: 2, sharp: -1, tough: 0, weird: -1 },
-      { charm: 2, cool: -1, sharp: 1, tough: 1, weird: -1 },
-      { charm: 1, cool: 2, sharp: 1, tough: -1, weird: -1 },
-      { charm: 2, cool: 1, sharp: 1, tough: -1, weird: -1 },
+      { charm: 2, cool: 0, sharp: 1, tough: 1, weird: -1 },
+      { charm: 2, cool: 1, sharp: 1, tough: 0, weird: -1 },
+      { charm: 2, cool: -1, sharp: 1, tough: 1, weird: 0 },
+      { charm: 2, cool: 1, sharp: -1, tough: 1, weird: 0 },
     ],
     moves: [
       {
+        id: 'mundane-always-the-victim',
+        name: 'Always the Victim',
+        description: 'Whenever another hunter protects you, or whenever you are captured or cornered by a monster, mark experience.',
+      },
+      {
         id: 'mundane-oops',
         name: 'Oops!',
-        description: 'When you stumble into danger through clumsy curiosity, mark 1 experience and find a critical clue.',
+        description: 'Whenever you stumble around in danger or fumble blindly, roll +Cool. On a 10+, you accidentally find a vital clue, an exit, or a monster’s weakness. On a 7-9, you find it, but you make a lot of noise or break something. On a miss, you step right into the monster’s lair or trap.',
+        stat: 'cool',
       },
       {
         id: 'mundane-let-get-out-of-here',
         name: 'Let’s Get Out of Here!',
-        description: 'When you lead fleeing civilians or your team to safety, roll +Charm. On 10+, everyone escapes unscathed.',
+        description: 'When you protect someone by leading them away from danger or urging everyone to retreat, roll +Charm instead of +Tough.',
         stat: 'charm',
       },
       {
-        id: 'mundane-panic',
-        name: 'Panic button',
-        description: 'When you run away screaming from an overwhelming monster, gain +2 to Act Under Pressure.',
+        id: 'mundane-panic-button',
+        name: 'Panic Button',
+        description: 'When you need to escape a terrifying or overwhelming situation immediately, roll +Sharp. On a 10+, you escape completely to a safe place. On a 7-9, you escape, but you leave behind something important or get separated from the group. On a miss, you run straight into worse danger.',
+        stat: 'sharp',
+      },
+      {
+        id: 'mundane-the-power-of-hope',
+        name: 'The Power of Hope',
+        description: 'When you give an inspiring pep talk or reassure another hunter who is scared or desperate, roll +Charm. On a 10+, they clear 1 harm or 1 unstable condition, and take +1 forward. On a 7-9, they take +1 forward. On a miss, your optimism feels hollow and demoralizing.',
+        stat: 'charm',
+      },
+      {
+        id: 'mundane-trust-me',
+        name: 'Trust Me',
+        description: 'When you manipulate someone mundane (police, security, bystander) with plain common sense or relatable honesty, take +1 to the roll.',
       },
       {
         id: 'mundane-dont-worry',
-        name: 'Don’t Worry About Me',
-        description: 'When you protect another hunter, you can take all harm intended for them, but mark 1 experience immediately.',
-      },
-      {
-        id: 'mundane-the-power-of-friendship',
-        name: 'The Power of Hope',
-        description: 'When you give a pep talk or cheer on an ally, their next roll takes +2 forward instead of +1.',
+        name: 'Don’t Worry, I’ll Check It Out',
+        description: 'When you go alone into a creepy or obviously suspicious place to investigate, roll +Cool. On a 10+, you find the clue safely and make it back. On a 7-9, you find what you were looking for, but you are spotted or trapped. On a miss, you are ambushed without warning.',
+        stat: 'cool',
       },
     ],
     improvements: [
@@ -1379,4 +1514,70 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 ];
 
 export const PLAYBOOKS_DATA: PlaybookDefinition[] = PLAYBOOKS;
+
+/**
+ * Automated Playbook Integrity Validator
+ * Runs on module load to guarantee all 28 canonical playbooks meet MotW system standards.
+ */
+export function validatePlaybookIntegrity(playbooks: PlaybookDefinition[]): boolean {
+  const issues: string[] = [];
+
+  if (playbooks.length !== 28) {
+    issues.push(`Expected 28 canonical playbooks, but found ${playbooks.length}`);
+  }
+
+  playbooks.forEach((p) => {
+    // Exactly 5 valid rating lines
+    if (!Array.isArray(p.statOptions) || p.statOptions.length !== 5) {
+      issues.push(`[${p.name}] Must have exactly 5 stat options lines (found ${p.statOptions?.length || 0})`);
+    } else {
+      p.statOptions.forEach((s, idx) => {
+        if (
+          typeof s.charm !== 'number' ||
+          typeof s.cool !== 'number' ||
+          typeof s.sharp !== 'number' ||
+          typeof s.tough !== 'number' ||
+          typeof s.weird !== 'number'
+        ) {
+          issues.push(`[${p.name}] Stat option line ${idx + 1} has invalid ratings`);
+        }
+      });
+    }
+
+    // Non-empty moves array where every move has a name and description
+    if (!Array.isArray(p.moves) || p.moves.length === 0) {
+      issues.push(`[${p.name}] Must have a non-empty moves array`);
+    } else {
+      p.moves.forEach((m, idx) => {
+        if (!m.name || !m.name.trim()) {
+          issues.push(`[${p.name}] Move at index ${idx} is missing a name`);
+        }
+        if (!m.description || !m.description.trim()) {
+          issues.push(`[${p.name}] Move "${m.name || idx}" is missing a description`);
+        }
+      });
+    }
+
+    // Defined luck special text
+    if (!p.luckSpecial || typeof p.luckSpecial !== 'string' || !p.luckSpecial.trim()) {
+      issues.push(`[${p.name}] Must have defined luck special text`);
+    }
+
+    // Starting gear lists
+    if (!Array.isArray(p.gearChoices) || p.gearChoices.length === 0) {
+      issues.push(`[${p.name}] Must have a non-empty starting gear list`);
+    }
+  });
+
+  if (issues.length > 0) {
+    console.warn('[MOTW Companion] Playbook integrity verification warnings:\n' + issues.join('\n'));
+    return false;
+  }
+
+  console.log('[MOTW Companion] All 28 playbooks verified successfully.');
+  return true;
+}
+
+// Execute once on load
+validatePlaybookIntegrity(PLAYBOOKS);
 
