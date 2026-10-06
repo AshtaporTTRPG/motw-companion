@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import OBR from '@owlbear-rodeo/sdk';
 import { Navigation } from './components/Navigation';
 import { HunterTab } from './components/HunterTab';
@@ -18,6 +18,7 @@ import {
   BroadcastPayload,
 } from './types/motw';
 import { PLAYBOOKS } from './data/playbooks';
+import { executePbtaRoll } from './utils/rollEngine';
 import { Eye, Bell, X, ShieldAlert } from 'lucide-react';
 
 const METADATA_HUNTERS = 'com.motw.companion/hunters';
@@ -130,17 +131,32 @@ export default function App() {
   const activeHunter =
     allHunters.find((h) => h.id === activeHunterId) || allHunters[0] || null;
 
-  // Sync to room metadata helper
+  // Debounce timers for room metadata writes (400ms debounce to prevent race conditions)
+  const debounceTimersRef = useRef<Record<string, any>>({});
+
+  useEffect(() => {
+    return () => {
+      Object.values(debounceTimersRef.current).forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
+
+  // Sync to room metadata helper (400ms debounce)
   const syncRoomMetadata = useCallback((key: string, value: any) => {
-    if (OBR.isAvailable) {
-      try {
-        OBR.room.setMetadata({ [key]: value }).catch((err) => {
-          console.warn(`Failed to set metadata ${key}:`, err);
-        });
-      } catch (err) {
-        console.warn(`Error setting metadata ${key}:`, err);
-      }
+    if (debounceTimersRef.current[key]) {
+      clearTimeout(debounceTimersRef.current[key]);
     }
+
+    debounceTimersRef.current[key] = setTimeout(() => {
+      if (OBR.isAvailable) {
+        try {
+          OBR.room.setMetadata({ [key]: value }).catch((err) => {
+            console.warn(`Failed to set metadata ${key}:`, err);
+          });
+        } catch (err) {
+          console.warn(`Error setting metadata ${key}:`, err);
+        }
+      }
+    }, 400);
   }, []);
 
   // Owlbear Rodeo Integration
@@ -354,8 +370,18 @@ export default function App() {
     syncRoomMetadata(METADATA_BROADCAST, payload);
   };
 
-  // Quick Roll Trigger from Grimoire or Hunter sheet
+  // Quick Roll Trigger from Grimoire or Hunter sheet (Automatically executes roll with Hunter's stat)
   const handleQuickRollFromOtherTab = (stat: StatType | undefined, moveName: string) => {
+    const rollData = executePbtaRoll({
+      moveName,
+      stat,
+      hunter: activeHunter,
+      rollerId: currentUserId,
+      rollerName: currentUserName || (role === 'GM' ? 'Keeper' : 'Hunter'),
+      scope: 'public',
+    });
+
+    handleAddRoll(rollData);
     setSelectedMoveForRoll(moveName);
     setActiveTab('dice');
   };

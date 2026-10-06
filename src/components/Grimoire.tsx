@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { BASIC_MOVES, WEIRD_MOVES, PHENOMENA_REFERENCE, QUICK_RULES, HUNTER_AGENDA } from '../data/moves';
 import { MotWMove, StatType } from '../types/motw';
 import { Search, ChevronDown, ChevronRight, Dices, Shield, BookOpen, Sparkles, AlertOctagon, HelpCircle } from 'lucide-react';
+import { detectStatFromMove } from '../utils/rollEngine';
 
 interface GrimoireProps {
   onQuickRollMove: (stat: StatType | undefined, moveName: string) => void;
@@ -278,6 +279,8 @@ export const Grimoire: React.FC<GrimoireProps> = ({ onQuickRollMove }) => {
 
   function renderMoveCard(move: MotWMove, isWeird: boolean = false) {
     const isExpanded = !!expandedMoveIds[move.id];
+    const resolvedStat = move.stat || detectStatFromMove(undefined, move.name, move.trigger);
+
     return (
       <div
         key={move.id}
@@ -287,7 +290,7 @@ export const Grimoire: React.FC<GrimoireProps> = ({ onQuickRollMove }) => {
         <div className="flex items-center justify-between p-2 hover:bg-neutral-850 transition-colors">
           <button
             onClick={() => toggleExpand(move.id)}
-            className="flex-1 flex items-center gap-2 text-left cursor-pointer"
+            className="flex-1 flex items-center gap-2 text-left cursor-pointer min-w-0"
           >
             {isExpanded ? (
               <ChevronDown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -296,7 +299,7 @@ export const Grimoire: React.FC<GrimoireProps> = ({ onQuickRollMove }) => {
             )}
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-xs font-bold text-neutral-100">{move.name}</span>
-              {move.stat && (
+              {resolvedStat && (
                 <span
                   className={`text-[10px] font-bold uppercase px-1.5 py-0.2 rounded border ${
                     isWeird
@@ -304,7 +307,7 @@ export const Grimoire: React.FC<GrimoireProps> = ({ onQuickRollMove }) => {
                       : 'bg-amber-950/60 text-amber-300 border-amber-800'
                   }`}
                 >
-                  +{move.stat}
+                  +{resolvedStat}
                 </span>
               )}
             </div>
@@ -312,8 +315,8 @@ export const Grimoire: React.FC<GrimoireProps> = ({ onQuickRollMove }) => {
 
           {/* Inline "Roll This Move" dice button */}
           <button
-            onClick={() => onQuickRollMove(move.stat, move.name)}
-            title={`Roll ${move.name} in Dice tab`}
+            onClick={() => onQuickRollMove(resolvedStat, move.name)}
+            title={`Roll ${move.name} with Hunter stat`}
             className="px-2 py-1 rounded bg-amber-600/30 hover:bg-amber-500 text-amber-300 hover:text-neutral-950 border border-amber-500/50 text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-xs shrink-0 ml-1.5"
           >
             <Dices className="w-3.5 h-3.5" />

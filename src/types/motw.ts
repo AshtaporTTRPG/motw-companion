@@ -27,6 +27,66 @@ export interface RollResult {
   scope: RollScope;
   timestamp: number;
   luckSpent?: boolean;
+  outcomeText?: string;
+  ruleDetails?: {
+    success10?: string;
+    mixed79?: string;
+    miss6?: string;
+    advanced12?: string;
+  };
+}
+
+export interface RoteCard {
+  id: string;
+  name: string;
+  requirements: string[]; // 2 selected: Incantation, Gestures, Components, Focus
+  success10: string;
+  mixed79: string;
+  miss6: string;
+}
+
+export interface PlaybookSubFeatures {
+  // The Chosen
+  fateHeroic?: string[];
+  fateDoom?: string[];
+  specialWeapon?: {
+    form: string;
+    tags: string[];
+    material: string;
+  };
+  // The Expert
+  havenOptions?: string[];
+  // The Professional
+  agencyResources?: string[];
+  agencyRedTape?: string[];
+  // The Initiate
+  goodTraditions?: string[];
+  badTraditions?: string[];
+  initiateWeapons?: string[];
+  // The Spooky
+  darkSideTags?: string[];
+  keeperLeverageNote?: string;
+  showKeeperLeverage?: boolean;
+  // The Hex
+  temptation?: string;
+  rotes?: RoteCard[];
+  // The Curse-Eater
+  corruption?: number; // 0 to 5
+  absorbedCurses?: string;
+  absorbedPowers?: string;
+  absorbedDownsides?: string;
+  // The Pararomantic
+  relationshipStatus?: number; // 0 to 4
+  guideArchetype?: string;
+  guideGiftType?: string;
+  guideGiftDesc?: string;
+  // The Monstrous
+  monstrousCurse?: string;
+  naturalAttackBase?: string;
+  naturalAttackExtras?: string[];
+  // Generic / Scratchpad
+  genericNotes?: string;
+  genericChecklist?: string[];
 }
 
 export interface HunterProfile {
@@ -45,6 +105,7 @@ export interface HunterProfile {
   gear: string;
   luckSpecial: string;
   improvementsTaken: string[];
+  subFeatures?: PlaybookSubFeatures;
   createdAt: number;
 }
 

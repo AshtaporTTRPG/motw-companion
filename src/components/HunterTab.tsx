@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { HunterProfile, HunterStats, StatType } from '../types/motw';
 import { PLAYBOOKS } from '../data/playbooks';
+import { PlaybookSubPanel } from './PlaybookSubPanel';
+import { detectStatFromMove } from '../utils/rollEngine';
 import {
   Heart,
   Clover,
@@ -18,7 +20,9 @@ import {
   Activity,
   Bed,
   Crosshair,
-  Info
+  Info,
+  Dices,
+  Crown
 } from 'lucide-react';
 
 interface HunterTabProps {
@@ -239,58 +243,77 @@ export const HunterTab: React.FC<HunterTabProps> = ({
       </div>
 
       {/* Keeper Roster Drawer for GM */}
-      {role === 'GM' && isRosterOpen && (
-        <div className="bg-neutral-900 border-b border-purple-900/60 p-2 space-y-1.5 max-h-52 overflow-y-auto shrink-0 shadow-lg">
-          <div className="flex items-center justify-between text-[11px] font-bold text-purple-300 uppercase tracking-wide">
-            <span>Keeper Roster (Live Party Status)</span>
-            <span className="text-[10px] text-neutral-400 font-normal">Click hunter to inspect sheet</span>
+      {role === 'GM' && (
+        <div className="bg-neutral-900 border-b border-purple-900/60 p-2 space-y-1.5 shrink-0 shadow-lg">
+          <div className="flex items-center justify-between text-[11px] font-bold text-purple-300">
+            <span className="flex items-center gap-1.5">
+              <Users className="w-3.5 h-3.5 text-purple-400" />
+              <span>Keeper Party Roster ({allHunters.length})</span>
+            </span>
+            <button
+              onClick={() => setIsRosterOpen(!isRosterOpen)}
+              className="flex items-center gap-1 text-[10px] text-purple-300 hover:text-white cursor-pointer px-1 py-0.5 rounded hover:bg-neutral-800"
+            >
+              <span>{isRosterOpen ? 'Collapse Strip' : 'Expand Strip'}</span>
+              {isRosterOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+            </button>
           </div>
-          {allHunters.length === 0 ? (
-            <p className="text-xs text-neutral-500 italic py-2">No hunters in room.</p>
-          ) : (
-            <div className="space-y-1">
-              {allHunters.map((h) => {
-                const isSelected = activeHunter?.id === h.id;
-                const harmLabel =
-                  h.harm >= 8
-                    ? 'Dying ☠️'
-                    : h.harm >= 4
-                    ? `Serious (${h.harm}/7)${h.unstable ? ' [Unstable]' : ''}`
-                    : `Minor (${h.harm}/7)`;
-                const harmBadgeColor =
-                  h.harm >= 8
-                    ? 'bg-red-950 text-red-300 border-red-700'
-                    : h.harm >= 4
-                    ? 'bg-yellow-950 text-yellow-300 border-yellow-700'
-                    : 'bg-neutral-800 text-neutral-300 border-neutral-700';
 
-                return (
-                  <div
-                    key={h.id}
-                    onClick={() => onSelectHunter(h)}
-                    className={`p-1.5 rounded border flex items-center justify-between text-xs cursor-pointer transition-colors ${
-                      isSelected
-                        ? 'bg-purple-950/80 border-purple-500 text-white'
-                        : 'bg-neutral-950/80 border-neutral-800 text-neutral-300 hover:bg-neutral-850'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 truncate">
-                      <span className="font-bold">{h.name}</span>
-                      <span className="text-[11px] text-neutral-400">({h.playbook})</span>
-                      <span className="text-[10px] text-neutral-500">[{h.ownerName}]</span>
-                    </div>
+          {isRosterOpen && (
+            <div className="space-y-1 max-h-52 overflow-y-auto">
+              {allHunters.length === 0 ? (
+                <p className="text-[11px] text-neutral-500 italic py-1">No hunters at table.</p>
+              ) : (
+                allHunters.map((h) => {
+                  const isSelected = activeHunter?.id === h.id;
+                  const harmBadgeColor =
+                    h.harm >= 8
+                      ? 'bg-red-950 text-red-300 border-red-700'
+                      : h.harm >= 4
+                      ? 'bg-yellow-950 text-yellow-300 border-yellow-700'
+                      : 'bg-neutral-800 text-neutral-300 border-neutral-700';
 
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className={`text-[10px] px-1.5 py-0.2 rounded border font-semibold ${harmBadgeColor}`}>
-                        Harm: {harmLabel}
-                      </span>
-                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-neutral-800 text-amber-300 border border-neutral-700 font-mono">
-                        Luck: {h.luck}/7
-                      </span>
+                  return (
+                    <div
+                      key={h.id}
+                      className={`p-1.5 rounded border flex items-center justify-between gap-1 text-xs transition-colors ${
+                        isSelected
+                          ? 'bg-purple-950/80 border-purple-500 text-white'
+                          : 'bg-neutral-950/80 border-neutral-800 text-neutral-300 hover:border-neutral-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5 truncate min-w-0 mr-1">
+                        <span className="font-bold truncate">{h.name}</span>
+                        <span className="text-[10px] text-neutral-400 truncate">({h.playbook})</span>
+                        <span className="text-[9px] text-neutral-500 truncate">[{h.ownerName}]</span>
+                      </div>
+
+                      {/* Mini status chips: [Name] | Harm: X/7 | Luck: X/7 | XP: X/5 | [Inspect] */}
+                      <div className="flex items-center gap-1 shrink-0 text-[10px]">
+                        <span className={`px-1.5 py-0.2 rounded border font-mono font-semibold ${harmBadgeColor}`}>
+                          Harm: {h.harm}/7
+                        </span>
+                        <span className="px-1.5 py-0.2 rounded bg-neutral-800 text-amber-300 border border-neutral-700 font-mono">
+                          Luck: {h.luck}/7
+                        </span>
+                        <span className="px-1.5 py-0.2 rounded bg-neutral-800 text-amber-400 border border-neutral-700 font-mono">
+                          XP: {h.experience}/5
+                        </span>
+                        <button
+                          onClick={() => onSelectHunter(h)}
+                          className={`px-2 py-0.5 rounded font-bold cursor-pointer transition-colors shadow-xs ${
+                            isSelected
+                              ? 'bg-purple-500 text-neutral-950 hover:bg-purple-400'
+                              : 'bg-purple-900/60 text-purple-200 border border-purple-700 hover:bg-purple-800'
+                          }`}
+                        >
+                          {isSelected ? 'Inspecting' : 'Inspect'}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           )}
         </div>
@@ -313,6 +336,17 @@ export const HunterTab: React.FC<HunterTabProps> = ({
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto p-2.5 space-y-3">
+          {/* Keeper Override Active Banner for GM */}
+          {role === 'GM' && (
+            <div className="bg-purple-950/40 border border-purple-600/70 rounded px-2.5 py-1.5 text-xs text-purple-200 flex items-center justify-between shadow-xs">
+              <div className="flex items-center gap-1.5 font-bold">
+                <Crown className="w-4 h-4 text-purple-400 shrink-0" />
+                <span>Keeper Inspection Active: {activeHunter.name}</span>
+              </div>
+              <span className="text-[10px] text-purple-300 font-mono">Full GM Override</span>
+            </div>
+          )}
+
           {/* Header Card: Name, Playbook, Look */}
           <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-2.5 space-y-2 shadow-xs">
             <div className="flex items-start justify-between gap-2">
@@ -623,54 +657,17 @@ export const HunterTab: React.FC<HunterTabProps> = ({
             </div>
           </div>
 
-          {/* Playbook Sub-Mechanic & Lore */}
-          {selectedPlaybookDef.subMechanics && (
-            <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-2.5 space-y-2 shadow-xs">
-              <div className="flex items-center justify-between text-xs font-bold text-amber-300">
-                <span className="flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-                  {selectedPlaybookDef.subMechanics.title}
-                </span>
-                <span className="text-[10px] text-amber-400/70 uppercase tracking-wide font-mono">Special Mechanic</span>
-              </div>
-
-              <p className="text-[11px] text-neutral-300 leading-relaxed">
-                {selectedPlaybookDef.subMechanics.description}
-              </p>
-
-              {selectedPlaybookDef.subMechanics.track && selectedPlaybookDef.subMechanics.track.length > 0 && (
-                <div className="space-y-1 pt-1 border-t border-neutral-800/80">
-                  <div className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">Status Track</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {selectedPlaybookDef.subMechanics.track.map((box, i) => (
-                      <span
-                        key={i}
-                        className="px-2 py-0.5 rounded bg-neutral-950 border border-amber-500/40 text-[10px] text-amber-200 font-mono"
-                      >
-                        {box}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {selectedPlaybookDef.subMechanics.options && selectedPlaybookDef.subMechanics.options.length > 0 && (
-                <div className="space-y-1 pt-1 border-t border-neutral-800/80">
-                  <div className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wide">Archetype Options & Traits</div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {selectedPlaybookDef.subMechanics.options.map((opt, i) => (
-                      <span
-                        key={i}
-                        className="px-1.5 py-0.5 rounded bg-neutral-950 border border-neutral-800 text-[10px] text-neutral-300"
-                      >
-                        {opt}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Dynamic Playbook-Specific Sub-System Panel */}
+          <PlaybookSubPanel
+            hunter={activeHunter}
+            onUpdateSubFeatures={(updatedSub) =>
+              onUpdateHunter({
+                ...activeHunter,
+                subFeatures: updatedSub,
+              })
+            }
+            onQuickRoll={onQuickRoll}
+          />
 
           {/* Playbook Moves Checklist */}
           <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-2.5 space-y-2 shadow-xs">
@@ -684,6 +681,8 @@ export const HunterTab: React.FC<HunterTabProps> = ({
             <div className="space-y-1.5">
               {selectedPlaybookDef.moves.map((move) => {
                 const isSelected = (activeHunter.selectedMoves || []).includes(move.id);
+                const moveStat = move.stat || detectStatFromMove(undefined, move.name, move.description);
+
                 return (
                   <div
                     key={move.id}
@@ -694,8 +693,8 @@ export const HunterTab: React.FC<HunterTabProps> = ({
                         : 'bg-neutral-950/60 border-neutral-800/80 text-neutral-400 hover:border-neutral-700'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 font-bold">
+                    <div className="flex items-center justify-between gap-1">
+                      <div className="flex items-center gap-1.5 font-bold min-w-0 flex-wrap">
                         {isSelected ? (
                           <CheckSquare className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                         ) : (
@@ -704,22 +703,24 @@ export const HunterTab: React.FC<HunterTabProps> = ({
                         <span className={isSelected ? 'text-amber-200' : 'text-neutral-300'}>
                           {move.name}
                         </span>
-                        {move.stat && (
+                        {moveStat && (
                           <span className="text-[9px] px-1 rounded bg-neutral-800 text-amber-400 uppercase font-mono">
-                            +{move.stat}
+                            +{moveStat}
                           </span>
                         )}
                       </div>
 
-                      {move.stat && (
+                      {moveStat && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (move.stat) onQuickRoll(move.stat, move.name);
+                            onQuickRoll(moveStat, move.name);
                           }}
-                          className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 hover:bg-amber-500 hover:text-neutral-950 text-amber-300 font-semibold cursor-pointer border border-neutral-700"
+                          title={`Roll ${move.name} (+${moveStat})`}
+                          className="text-[10px] px-2 py-0.5 rounded bg-amber-600/30 hover:bg-amber-500 hover:text-neutral-950 text-amber-300 font-bold cursor-pointer border border-amber-500/50 flex items-center gap-1 shrink-0 ml-1 shadow-xs transition-colors"
                         >
-                          Roll
+                          <Dices className="w-3 h-3" />
+                          <span>Roll</span>
                         </button>
                       )}
                     </div>
