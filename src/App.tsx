@@ -3,24 +3,39 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import OBR from '@owlbear-rodeo/sdk';
+import { Navigation } from './components/Navigation';
 import { HunterTab } from './components/HunterTab';
-import { DiceTab } from './components/DiceTab';
-import { GrimoireTab } from './components/GrimoireTab';
+import { DiceTray } from './components/DiceTray';
+import { Grimoire } from './components/Grimoire';
 import { NotesTab } from './components/NotesTab';
-import { HunterProfile, RollResult, StatType, CountdownStep, CaseNote } from './types/motw';
-import { COUNTDOWN_STAGES } from './data/motwMoves';
-import { Pin, PinOff } from 'lucide-react';
+import {
+  HunterProfile,
+  RollResult,
+  StatType,
+  TableNotesData,
+  BroadcastPayload,
+} from './types/motw';
+import { PLAYBOOKS } from './data/playbooks';
+import { Eye, Bell, X, ShieldAlert } from 'lucide-react';
 
-const DEFAULT_HUNTER: HunterProfile = {
+const METADATA_HUNTERS = 'com.motw.companion/hunters';
+const METADATA_ROLL_FEED = 'com.motw.companion/roll-feed';
+const METADATA_TABLE_NOTES = 'com.motw.companion/table-notes';
+const METADATA_BROADCAST = 'com.motw.companion/broadcast';
+
+const SEED_HUNTER: HunterProfile = {
+  id: 'hunter-seed-1',
+  ownerId: 'local-user-1',
+  ownerName: 'Player One',
   name: 'Sam Winchester',
   playbook: 'The Expert',
-  look: 'Dark coat, hunter charm amulet, leather journal',
-  harm: 0,
+  look: 'Dark canvas jacket, silver protection amulet, weathered research notebook',
+  harm: 1,
   unstable: false,
-  luck: 0,
-  experience: 0,
+  luck: 1,
+  experience: 2,
   stats: {
     charm: 0,
     cool: 1,
@@ -28,17 +43,18 @@ const DEFAULT_HUNTER: HunterProfile = {
     tough: 1,
     weird: -1,
   },
+  selectedMoves: ['expert-i-have-read-about-this', 'expert-preparedness'],
+  gear: 'Shotgun (3-harm close reload messy)\nSilver hunting dagger\nOld occult library cards',
+  luckSpecial: PLAYBOOKS[1].luckSpecial,
+  improvementsTaken: [],
+  createdAt: Date.now() - 86400000,
 };
-
-const DEFAULT_COUNTDOWN: CountdownStep[] = COUNTDOWN_STAGES.map((s) => ({
-  stage: s.stage,
-  description: s.desc,
-  completed: false,
-}));
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'hunter' | 'dice' | 'grimoire' | 'notes'>('hunter');
   const [role, setRole] = useState<'GM' | 'PLAYER'>('GM');
+  const [currentUserId, setCurrentUserId] = useState<string>('local-user-1');
+  const [currentUserName, setCurrentUserName] = useState<string>('Hunter');
   const [isPinned, setIsPinned] = useState<boolean>(() => {
     try {
       return localStorage.getItem('motw_companion_pinned') === 'true';
@@ -47,97 +63,154 @@ export default function App() {
     }
   });
 
-  // Hunter Sheet state with localStorage caching
-  const [hunter, setHunter] = useState<HunterProfile>(() => {
+  // Pre-selected move to roll when jumping from Grimoire / Hunter tab to Dice tray
+  const [selectedMoveForRoll, setSelectedMoveForRoll] = useState<string | null>(null);
+
+  // Hunters List (Synced to room metadata)
+  const [allHunters, setAllHunters] = useState<HunterProfile[]>(() => {
     try {
-      const saved = localStorage.getItem('motw_companion_hunter');
+      const saved = localStorage.getItem('motw_companion_hunters');
       if (saved) return JSON.parse(saved);
     } catch {
       // fallback
     }
-    return DEFAULT_HUNTER;
+    return [SEED_HUNTER];
   });
 
-  // Roll history state
-  const [rollHistory, setRollHistory] = useState<RollResult[]>([]);
-
-  // Notes and Countdown state with localStorage caching
-  const [countdown, setCountdown] = useState<CountdownStep[]>(() => {
+  // Active Hunter ID
+  const [activeHunterId, setActiveHunterId] = useState<string>(() => {
     try {
-      const saved = localStorage.getItem('motw_companion_countdown');
+      return localStorage.getItem('motw_companion_active_hunter_id') || 'hunter-seed-1';
+    } catch {
+      return 'hunter-seed-1';
+    }
+  });
+
+  // Roll Feed (Synced to room metadata)
+  const [rollFeed, setRollFeed] = useState<RollResult[]>(() => {
+    try {
+      const saved = localStorage.getItem('motw_companion_roll_feed');
       if (saved) return JSON.parse(saved);
     } catch {
       // fallback
     }
-    return DEFAULT_COUNTDOWN;
+    return [];
   });
 
-  const [notes, setNotes] = useState<CaseNote[]>(() => {
+  // Shared Table Notes (Synced to room metadata)
+  const [tableNotes, setTableNotes] = useState<TableNotesData>(() => {
     try {
-      const saved = localStorage.getItem('motw_companion_notes');
+      const saved = localStorage.getItem('motw_companion_table_notes');
       if (saved) return JSON.parse(saved);
     } catch {
       // fallback
     }
-    return [
-      {
-        id: 'default-note-1',
-        title: 'Sulfur in the abandoned chapel',
-        category: 'lead',
-        content: 'Traces of demonic brimstone found near the broken altar. Likely vulnerable to consecrated silver.',
-        updatedAt: Date.now(),
-      },
-    ];
+    return {
+      content: 'Case File: The Cold Lake Mystery\n- Witness report: Claw marks 8 feet high on old pines.\n- Evidence: Freezing temperatures near the abandoned cabin.\n- Suspects: Local cryptozoology researcher or supernatural phenomenon.',
+      updatedAt: Date.now(),
+      updatedBy: 'The Table',
+    };
   });
 
-  // Save states to localStorage
-  useEffect(() => {
+  // Broadcast Note (Synced to room metadata)
+  const [broadcast, setBroadcast] = useState<BroadcastPayload | null>(() => {
     try {
-      localStorage.setItem('motw_companion_hunter', JSON.stringify(hunter));
+      const saved = localStorage.getItem('motw_companion_broadcast');
+      if (saved) return JSON.parse(saved);
     } catch {
-      // ignore
+      // fallback
     }
-  }, [hunter]);
+    return null;
+  });
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('motw_companion_countdown', JSON.stringify(countdown));
-    } catch {
-      // ignore
+  // User dismissed broadcast local state
+  const [dismissedBroadcastId, setDismissedBroadcastId] = useState<string | null>(null);
+
+  // Active hunter profile object
+  const activeHunter =
+    allHunters.find((h) => h.id === activeHunterId) || allHunters[0] || null;
+
+  // Sync to room metadata helper
+  const syncRoomMetadata = useCallback((key: string, value: any) => {
+    if (OBR.isAvailable) {
+      try {
+        OBR.room.setMetadata({ [key]: value }).catch((err) => {
+          console.warn(`Failed to set metadata ${key}:`, err);
+        });
+      } catch (err) {
+        console.warn(`Error setting metadata ${key}:`, err);
+      }
     }
-  }, [countdown]);
+  }, []);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('motw_companion_notes', JSON.stringify(notes));
-    } catch {
-      // ignore
-    }
-  }, [notes]);
-
-  // Owlbear Rodeo SDK integration
+  // Owlbear Rodeo Integration
   useEffect(() => {
     if (OBR.isAvailable) {
       OBR.onReady(async () => {
         try {
-          const currentRole = await OBR.player.getRole();
-          setRole(currentRole === 'GM' ? 'GM' : 'PLAYER');
+          const userRole = await OBR.player.getRole();
+          const userId = await OBR.player.getId();
+          const userName = await OBR.player.getName();
 
+          setRole(userRole === 'GM' ? 'GM' : 'PLAYER');
+          setCurrentUserId(userId || 'player-' + Date.now());
+          setCurrentUserName(userName || (userRole === 'GM' ? 'Keeper' : 'Hunter'));
+
+          // Listen for player changes
           OBR.player.onChange((player) => {
             setRole(player.role === 'GM' ? 'GM' : 'PLAYER');
+            if (player.name) setCurrentUserName(player.name);
           });
 
-          // Sync initial pinned state
+          // Fetch initial room metadata
+          const metadata = await OBR.room.getMetadata();
+
+          if (metadata[METADATA_HUNTERS]) {
+            setAllHunters(metadata[METADATA_HUNTERS] as HunterProfile[]);
+          }
+          if (metadata[METADATA_ROLL_FEED]) {
+            setRollFeed(metadata[METADATA_ROLL_FEED] as RollResult[]);
+          }
+          if (metadata[METADATA_TABLE_NOTES]) {
+            setTableNotes(metadata[METADATA_TABLE_NOTES] as TableNotesData);
+          }
+          if (metadata[METADATA_BROADCAST]) {
+            setBroadcast(metadata[METADATA_BROADCAST] as BroadcastPayload);
+          }
+
+          // Subscribe to live room metadata updates
+          OBR.room.onMetadataChange((updatedMetadata) => {
+            if (updatedMetadata[METADATA_HUNTERS] !== undefined) {
+              setAllHunters((updatedMetadata[METADATA_HUNTERS] as HunterProfile[]) || []);
+            }
+            if (updatedMetadata[METADATA_ROLL_FEED] !== undefined) {
+              setRollFeed((updatedMetadata[METADATA_ROLL_FEED] as RollResult[]) || []);
+            }
+            if (updatedMetadata[METADATA_TABLE_NOTES] !== undefined) {
+              setTableNotes(
+                (updatedMetadata[METADATA_TABLE_NOTES] as TableNotesData) || {
+                  content: '',
+                  updatedAt: Date.now(),
+                  updatedBy: '',
+                }
+              );
+            }
+            if (updatedMetadata[METADATA_BROADCAST] !== undefined) {
+              setBroadcast((updatedMetadata[METADATA_BROADCAST] as BroadcastPayload) || null);
+            }
+          });
+
+          // Pin initialization
           const cachedPin = localStorage.getItem('motw_companion_pinned') === 'true';
           if (cachedPin && 'setProperties' in OBR.popover) {
             await (OBR.popover as any).setProperties({ disableClickAway: true });
           }
         } catch (err) {
-          console.warn('OBR initialization warning:', err);
+          console.warn('OBR initialization error:', err);
         }
       });
     } else {
-      // If outside OBR (development / standalone preview), retrieve simulated role
+      // Standalone mode: retrieve simulated role
       const cachedRole = localStorage.getItem('motw_companion_role');
       if (cachedRole === 'GM' || cachedRole === 'PLAYER') {
         setRole(cachedRole);
@@ -145,22 +218,53 @@ export default function App() {
     }
   }, []);
 
-  // Handle window pin toggle controlling OBR.popover.setProperties({ disableClickAway })
-  const handleTogglePin = async () => {
-    const nextPinned = !isPinned;
-    setIsPinned(nextPinned);
+  // Save states to local storage caching
+  useEffect(() => {
     try {
-      localStorage.setItem('motw_companion_pinned', String(nextPinned));
-    } catch {
-      // ignore
-    }
+      localStorage.setItem('motw_companion_hunters', JSON.stringify(allHunters));
+    } catch {}
+  }, [allHunters]);
+
+  useEffect(() => {
+    try {
+      if (activeHunterId) {
+        localStorage.setItem('motw_companion_active_hunter_id', activeHunterId);
+      }
+    } catch {}
+  }, [activeHunterId]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('motw_companion_roll_feed', JSON.stringify(rollFeed));
+    } catch {}
+  }, [rollFeed]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('motw_companion_table_notes', JSON.stringify(tableNotes));
+    } catch {}
+  }, [tableNotes]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('motw_companion_broadcast', JSON.stringify(broadcast));
+    } catch {}
+  }, [broadcast]);
+
+  // Handle Pin Toggle
+  const handleTogglePin = async () => {
+    const nextPin = !isPinned;
+    setIsPinned(nextPin);
+    try {
+      localStorage.setItem('motw_companion_pinned', String(nextPin));
+    } catch {}
 
     if (OBR.isAvailable) {
       try {
         if ('setProperties' in OBR.popover) {
-          await (OBR.popover as any).setProperties({ disableClickAway: nextPinned });
+          await (OBR.popover as any).setProperties({ disableClickAway: nextPin });
         } else if ('setProperties' in (OBR as any).action) {
-          await (OBR as any).action.setProperties({ disableClickAway: nextPinned });
+          await (OBR as any).action.setProperties({ disableClickAway: nextPin });
         }
       } catch (err) {
         console.warn('Failed to set popover properties in OBR:', err);
@@ -175,144 +279,221 @@ export default function App() {
       setRole(nextRole);
       try {
         localStorage.setItem('motw_companion_role', nextRole);
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
   };
 
-  const handleQuickRollFromTab = (stat: StatType, moveName: string) => {
-    setActiveTab('dice');
-    // The dice tab will immediately be displayed, letting the player roll
+  // Hunter Handlers
+  const handleUpdateHunter = (updated: HunterProfile) => {
+    const nextHunters = allHunters.map((h) => (h.id === updated.id ? updated : h));
+    setAllHunters(nextHunters);
+    syncRoomMetadata(METADATA_HUNTERS, nextHunters);
   };
 
+  const handleCreateHunter = (newHunter: HunterProfile) => {
+    const nextHunters = [...allHunters, newHunter];
+    setAllHunters(nextHunters);
+    setActiveHunterId(newHunter.id);
+    syncRoomMetadata(METADATA_HUNTERS, nextHunters);
+  };
+
+  const handleDeleteHunter = (hunterId: string) => {
+    const nextHunters = allHunters.filter((h) => h.id !== hunterId);
+    setAllHunters(nextHunters);
+    if (activeHunterId === hunterId) {
+      setActiveHunterId(nextHunters[0]?.id || '');
+    }
+    syncRoomMetadata(METADATA_HUNTERS, nextHunters);
+  };
+
+  // Roll Feed Handlers
+  const handleAddRoll = (roll: RollResult) => {
+    // Keep latest 50 rolls to avoid bloated metadata
+    const nextFeed = [roll, ...rollFeed].slice(0, 50);
+    setRollFeed(nextFeed);
+    syncRoomMetadata(METADATA_ROLL_FEED, nextFeed);
+  };
+
+  const handleClearFeed = () => {
+    setRollFeed([]);
+    syncRoomMetadata(METADATA_ROLL_FEED, []);
+  };
+
+  // Mark XP from DiceTray (e.g. on Miss)
+  const handleMarkExperience = () => {
+    if (!activeHunter) return;
+    const nextExp = Math.min(5, activeHunter.experience + 1);
+    handleUpdateHunter({
+      ...activeHunter,
+      experience: nextExp,
+    });
+  };
+
+  // Spend Luck from DiceTray
+  const handleSpendLuckFromDice = () => {
+    if (!activeHunter || activeHunter.luck >= 7) return;
+    handleUpdateHunter({
+      ...activeHunter,
+      luck: activeHunter.luck + 1,
+    });
+  };
+
+  // Shared Table Notes Handler
+  const handleUpdateTableNotes = (data: TableNotesData) => {
+    setTableNotes(data);
+    syncRoomMetadata(METADATA_TABLE_NOTES, data);
+  };
+
+  // Keeper Broadcast Handler
+  const handleUpdateBroadcast = (payload: BroadcastPayload | null) => {
+    setBroadcast(payload);
+    // Reset dismiss state so all players see new broadcast
+    if (payload?.active) {
+      setDismissedBroadcastId(null);
+    }
+    syncRoomMetadata(METADATA_BROADCAST, payload);
+  };
+
+  // Quick Roll Trigger from Grimoire or Hunter sheet
+  const handleQuickRollFromOtherTab = (stat: StatType | undefined, moveName: string) => {
+    setSelectedMoveForRoll(moveName);
+    setActiveTab('dice');
+  };
+
+  const isBroadcastVisible =
+    broadcast &&
+    broadcast.active &&
+    broadcast.id !== dismissedBroadcastId;
+
   return (
-    <div className="w-full h-full min-h-screen bg-[#07090f] flex items-center justify-center p-0 sm:p-2">
-      {/* High-density popover container locked to max-w-[480px] and max-h-[820px] */}
-      <div className="w-full h-screen max-w-[480px] max-h-[820px] flex flex-col bg-neutral-950 text-neutral-100 overflow-hidden border border-neutral-800 shadow-2xl relative">
-        {/* Top Navigation Bar: h-11 shrink-0 z-40 bg-neutral-900 border-b border-neutral-800 px-2 flex items-center justify-between */}
-        <header className="h-11 shrink-0 z-40 bg-neutral-900 border-b border-neutral-800 px-2 flex items-center justify-between gap-1 select-none">
-          {/* 4 primary tabs: [🏹 Hunter] [🎲 Dice] [📖 Grimoire] [📝 Notes] */}
-          <nav className="flex items-center gap-1">
-            <button
-              onClick={() => setActiveTab('hunter')}
-              className={`px-2 py-1 rounded text-xs font-semibold flex items-center gap-1 transition-colors ${
-                activeTab === 'hunter'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                  : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60'
-              }`}
-              title="Hunter Character Sheet"
-            >
-              <span>🏹</span> Hunter
-            </button>
-            <button
-              onClick={() => setActiveTab('dice')}
-              className={`px-2 py-1 rounded text-xs font-semibold flex items-center gap-1 transition-colors ${
-                activeTab === 'dice'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                  : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60'
-              }`}
-              title="Dice Roller"
-            >
-              <span>🎲</span> Dice
-            </button>
-            <button
-              onClick={() => setActiveTab('grimoire')}
-              className={`px-2 py-1 rounded text-xs font-semibold flex items-center gap-1 transition-colors ${
-                activeTab === 'grimoire'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                  : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60'
-              }`}
-              title="Grimoire & Moves Reference"
-            >
-              <span>📖</span> Grimoire
-            </button>
-            <button
-              onClick={() => setActiveTab('notes')}
-              className={`px-2 py-1 rounded text-xs font-semibold flex items-center gap-1 transition-colors ${
-                activeTab === 'notes'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                  : 'text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/60'
-              }`}
-              title="Mystery Countdown & Casebook"
-            >
-              <span>📝</span> Notes
-            </button>
-          </nav>
+    <div className="w-full h-full min-h-screen bg-[#07090f] flex items-center justify-center p-0 sm:p-2 select-none">
+      {/* High-density popover container locked to max-w-[480px] max-h-[820px] h-full */}
+      <div className="w-full h-screen max-w-[480px] max-h-[820px] flex flex-col bg-neutral-950 text-neutral-100 overflow-hidden border border-neutral-800 shadow-2xl relative font-sans">
+        {/* Core Sticky Navigation Header */}
+        <Navigation
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          role={role}
+          onToggleRole={handleRoleToggle}
+          isPinned={isPinned}
+          onTogglePin={handleTogglePin}
+        />
 
-          {/* Utility cluster: Keeper role badge & window pin button */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            {/* Keeper role badge (👑 Keeper / Hunter based on OBR.player.getRole()) */}
-            <button
-              onClick={handleRoleToggle}
-              title={
-                OBR.isAvailable
-                  ? `Active OBR Role: ${role === 'GM' ? 'Keeper (GM)' : 'Hunter (Player)'}`
-                  : `Role: ${role === 'GM' ? 'Keeper' : 'Hunter'} (Click to toggle in preview mode)`
-              }
-              className={`px-2 py-0.5 rounded text-[11px] font-bold flex items-center gap-1 border transition-colors ${
-                role === 'GM'
-                  ? 'bg-amber-950/80 text-amber-300 border-amber-600/60 hover:bg-amber-900/80 shadow-sm'
-                  : 'bg-neutral-800 text-neutral-300 border-neutral-700 hover:bg-neutral-750'
-              }`}
-            >
-              <span>{role === 'GM' ? '👑 Keeper' : '🏹 Hunter'}</span>
-            </button>
-
-            {/* Window pin button controlling OBR.popover.setProperties({ disableClickAway }) with localStorage caching */}
-            <button
-              onClick={handleTogglePin}
-              title={isPinned ? 'Window Pinned (Click away won’t close)' : 'Window Unpinned (Click away closes)'}
-              className={`w-7 h-7 flex items-center justify-center rounded border transition-colors ${
-                isPinned
-                  ? 'bg-amber-500 text-neutral-950 border-amber-400 shadow-sm shadow-amber-950'
-                  : 'bg-neutral-800 text-neutral-400 border-neutral-700 hover:text-neutral-200 hover:bg-neutral-700'
-              }`}
-            >
-              {isPinned ? <Pin className="w-3.5 h-3.5 fill-current" /> : <PinOff className="w-3.5 h-3.5" />}
-            </button>
-          </div>
-        </header>
-
-        {/* Tab Content Views: Scaffold clean panels for each of the 4 tabs confirming active view */}
+        {/* Tab Content Views */}
         <main className="flex-1 flex flex-col overflow-hidden relative">
           {activeTab === 'hunter' && (
             <HunterTab
-              hunter={hunter}
-              setHunter={setHunter}
-              onQuickRoll={(stat, moveName) => handleQuickRollFromTab(stat, moveName)}
+              currentUserId={currentUserId}
+              currentUserName={currentUserName}
+              role={role}
+              allHunters={allHunters}
+              activeHunter={activeHunter}
+              onSelectHunter={(h) => setActiveHunterId(h.id)}
+              onUpdateHunter={handleUpdateHunter}
+              onCreateHunter={handleCreateHunter}
+              onDeleteHunter={handleDeleteHunter}
+              onQuickRoll={(stat, moveName) => handleQuickRollFromOtherTab(stat, moveName)}
             />
           )}
 
           {activeTab === 'dice' && (
-            <DiceTab
-              hunter={hunter}
-              rollHistory={rollHistory}
-              setRollHistory={setRollHistory}
-              onExperienceEarned={() => {
-                setHunter((prev) => ({
-                  ...prev,
-                  experience: Math.min(5, prev.experience + 1),
-                }));
-              }}
+            <DiceTray
+              activeHunter={activeHunter}
+              role={role}
+              currentUserId={currentUserId}
+              currentUserName={currentUserName}
+              rollFeed={rollFeed}
+              onAddRoll={handleAddRoll}
+              onClearFeed={handleClearFeed}
+              onMarkExperience={handleMarkExperience}
+              onSpendLuck={handleSpendLuckFromDice}
+              selectedMoveName={selectedMoveForRoll}
+              onClearSelectedMove={() => setSelectedMoveForRoll(null)}
             />
           )}
 
           {activeTab === 'grimoire' && (
-            <GrimoireTab
-              onQuickRollMove={(stat, moveName) => handleQuickRollFromTab(stat, moveName)}
+            <Grimoire
+              onQuickRollMove={(stat, moveName) =>
+                handleQuickRollFromOtherTab(stat, moveName)
+              }
             />
           )}
 
           {activeTab === 'notes' && (
             <NotesTab
-              countdown={countdown}
-              setCountdown={setCountdown}
-              notes={notes}
-              setNotes={setNotes}
+              activeHunter={activeHunter}
+              role={role}
+              currentUserName={currentUserName}
+              tableNotes={tableNotes}
+              onUpdateTableNotes={handleUpdateTableNotes}
+              activeBroadcast={broadcast}
+              onUpdateBroadcast={handleUpdateBroadcast}
             />
           )}
         </main>
+
+        {/* Centered Modal Overlay for Keeper Broadcast (Appears on all players' screens) */}
+        {isBroadcastVisible && (
+          <div className="absolute inset-0 z-50 bg-black/85 backdrop-blur-xs flex items-center justify-center p-3 animate-in fade-in duration-200">
+            <div className="bg-neutral-900 border-2 border-amber-500 rounded-xl p-4 w-full max-w-sm space-y-3 shadow-2xl shadow-amber-950/80 text-neutral-100 flex flex-col max-h-[85%]">
+              {/* Broadcast Header */}
+              <div className="flex items-start justify-between border-b border-neutral-800 pb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500 flex items-center justify-center text-amber-300">
+                    <Eye className="w-4 h-4 animate-pulse" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-400 block">
+                      Keeper Broadcast 👁️
+                    </span>
+                    <h3 className="font-extrabold text-sm text-neutral-100 leading-tight">
+                      {broadcast.title}
+                    </h3>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setDismissedBroadcastId(broadcast.id)}
+                  className="text-neutral-400 hover:text-white p-1 rounded hover:bg-neutral-800 cursor-pointer"
+                  title="Dismiss view"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Broadcast Content */}
+              <div className="flex-1 overflow-y-auto pr-1">
+                <p className="text-xs text-neutral-200 whitespace-pre-line leading-relaxed font-sans">
+                  {broadcast.content}
+                </p>
+              </div>
+
+              {/* Broadcast Footer & Dismiss */}
+              <div className="pt-2 border-t border-neutral-800 flex items-center justify-between text-xs">
+                <span className="text-[10px] text-neutral-500">
+                  Shared by {broadcast.authorName || 'Keeper'}
+                </span>
+                <div className="flex items-center gap-2">
+                  {role === 'GM' && (
+                    <button
+                      onClick={() => handleUpdateBroadcast(null)}
+                      className="px-2.5 py-1 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-300 font-semibold cursor-pointer text-xs"
+                    >
+                      Close Broadcast
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setDismissedBroadcastId(broadcast.id)}
+                    className="px-3 py-1 rounded bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold shadow cursor-pointer text-xs"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
