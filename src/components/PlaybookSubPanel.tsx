@@ -28,12 +28,14 @@ interface PlaybookSubPanelProps {
   hunter: HunterProfile;
   onUpdateSubFeatures: (updated: PlaybookSubFeatures) => void;
   onQuickRoll: (stat: StatType, moveName: string) => void;
+  onUpdateHunter?: (updated: HunterProfile) => void;
 }
 
 export const PlaybookSubPanel: React.FC<PlaybookSubPanelProps> = ({
   hunter,
   onUpdateSubFeatures,
   onQuickRoll,
+  onUpdateHunter,
 }) => {
   const [isRoteModalOpen, setIsRoteModalOpen] = useState(false);
   const [editingRote, setEditingRote] = useState<RoteCard | null>(null);
@@ -1203,32 +1205,153 @@ export const PlaybookSubPanel: React.FC<PlaybookSubPanelProps> = ({
     ];
 
     const bases = [
-      { id: 'Teeth', label: 'Teeth (2-harm intimate messy)' },
-      { id: 'Claws', label: 'Claws (2-harm hand messy)' },
-      { id: 'Magical Force', label: 'Magical Force (1-harm close magic)' },
-      { id: 'Life-drain', label: 'Life-drain (1-harm intimate life-drain)' },
+      { id: 'teeth', name: 'Teeth', harm: 3, range: 'intimate', label: 'teeth (3-harm intimate)' },
+      { id: 'claws', name: 'Claws', harm: 2, range: 'hand', label: 'claws (2-harm hand)' },
+      { id: 'magical force', name: 'Magical force', harm: 1, range: 'magical close', label: 'magical force (1-harm magical close)' },
+      { id: 'life-drain', name: 'Life-drain', harm: 1, range: 'intimate life-drain', label: 'life-drain (1-harm intimate life-drain)' },
     ];
 
-    const extras = [
-      '+1 harm',
-      'ignore-armour',
-      'close range',
-      'forceful',
-      'messy',
-      'life-drain',
+    const extrasList = [
+      { id: '+1 harm', label: 'Add +1 harm to a base' },
+      { id: 'ignore-armour', label: 'Add ignore-armour to a base' },
+      { id: 'extra range', label: 'Add an extra range to a base (add intimate, hand, or close)' },
     ];
 
     const selectedCurse = sub.monstrousCurse || 'Feed';
-    const selectedBase = sub.naturalAttackBase || 'Claws';
-    const selectedExtras = sub.naturalAttackExtras || ['+1 harm', 'ignore-armour'];
 
-    // Computed attack profile
-    const hasPlusHarm = selectedExtras.includes('+1 harm');
-    const isClose = selectedExtras.includes('close range');
-    const baseDamage = selectedBase === 'Magical Force' || selectedBase === 'Life-drain' ? (hasPlusHarm ? 2 : 1) : (hasPlusHarm ? 3 : 2);
-    const range = isClose ? 'close' : selectedBase === 'Magical Force' ? 'close' : selectedBase === 'Teeth' || selectedBase === 'Life-drain' ? 'intimate' : 'hand';
-    const filterExtras = selectedExtras.filter((e) => e !== '+1 harm' && e !== 'close range');
-    const computedAttack = `${selectedBase}: ${baseDamage}-harm ${range} ${filterExtras.join(' ')}`.trim();
+    // Parse selected bases (support naturalAttackBases array or fallback to naturalAttackBase)
+    const selectedBases: string[] = Array.isArray(sub.naturalAttackBases) && sub.naturalAttackBases.length > 0
+      ? sub.naturalAttackBases
+      : sub.naturalAttackBase
+      ? [sub.naturalAttackBase.toLowerCase()]
+      : ['claws'];
+
+    const selectedExtras: string[] = sub.naturalAttackExtras || [];
+    const selectedExtraRange: string = sub.naturalAttackExtraRange || 'close';
+
+    const handleToggleBase = (baseId: string) => {
+      const lower = baseId.toLowerCase();
+      let nextBases: string[];
+      if (selectedBases.includes(lower)) {
+        if (selectedBases.length > 1) {
+          nextBases = selectedBases.filter((b) => b !== lower);
+        } else {
+          // Keep at least 1 base or allow toggling to another
+          nextBases = [lower];
+        }
+      } else {
+        if (selectedBases.length === 0) {
+          nextBases = [lower];
+        } else if (selectedBases.length === 1) {
+          // Switch to Mode B (2 Bases)
+          nextBases = [selectedBases[0], lower];
+        } else {
+          // Already 2 bases, replace the second base
+          nextBases = [selectedBases[0], lower];
+        }
+      }
+
+      // Selection Constraints:
+      // Mode B (2 Bases) => disable all extras, clear extras array
+      // Mode A (1 Base) => allow 1 extra
+      const nextExtras = nextBases.length === 2 ? [] : selectedExtras.slice(0, 1);
+
+      const updatedSub = {
+        ...sub,
+        naturalAttackBase: nextBases[0] || 'claws',
+        naturalAttackBases: nextBases,
+        naturalAttackExtras: nextExtras,
+      };
+
+      onUpdateSubFeatures(updatedSub);
+      if (onUpdateHunter) {
+        onUpdateHunter({
+          ...hunter,
+          subFeatures: updatedSub,
+        });
+      }
+    };
+
+    const handleToggleExtra = (extraId: string) => {
+      // If 2 bases selected, extras are strictly disabled (0 extras allowed)
+      if (selectedBases.length >= 2) return;
+
+      let nextExtras: string[];
+      if (selectedExtras.includes(extraId)) {
+        nextExtras = [];
+      } else {
+        // Mode A: Allow exactly 1 Extra. Replace previous selection.
+        nextExtras = [extraId];
+      }
+
+      const updatedSub = {
+        ...sub,
+        naturalAttackExtras: nextExtras,
+      };
+
+      onUpdateSubFeatures(updatedSub);
+      if (onUpdateHunter) {
+        onUpdateHunter({
+          ...hunter,
+          subFeatures: updatedSub,
+        });
+      }
+    };
+
+    const handleSelectExtraRange = (rangeVal: string) => {
+      const updatedSub = {
+        ...sub,
+        naturalAttackExtraRange: rangeVal,
+      };
+      onUpdateSubFeatures(updatedSub);
+      if (onUpdateHunter) {
+        onUpdateHunter({
+          ...hunter,
+          subFeatures: updatedSub,
+        });
+      }
+    };
+
+    // Live natural attack profile summary generator
+    const getSummary = () => {
+      if (selectedBases.length === 0) return 'No base attack selected';
+
+      // Mode B: 2 Bases
+      if (selectedBases.length === 2) {
+        const b1 = bases.find((b) => b.id.toLowerCase() === selectedBases[0].toLowerCase());
+        const b2 = bases.find((b) => b.id.toLowerCase() === selectedBases[1].toLowerCase());
+        const b1Text = b1 ? `${b1.name} (${b1.label.replace(/^.*?\((.*)\)$/, '$1')})` : selectedBases[0];
+        const b2Text = b2 ? `${b2.name} (${b2.label.replace(/^.*?\((.*)\)$/, '$1')})` : selectedBases[1];
+        return `${b1Text} & ${b2Text}`;
+      }
+
+      // Mode A: 1 Base + exactly 1 Extra
+      const b = bases.find((base) => base.id.toLowerCase() === selectedBases[0].toLowerCase()) || bases[0];
+      const baseStatInside = b.label.replace(/^.*?\((.*)\)$/, '$1');
+      const activeExtra = selectedExtras[0];
+
+      if (!activeExtra) {
+        return `${b.name}: ${baseStatInside} (Pick 1 Extra, or pick a 2nd Base)`;
+      }
+
+      if (activeExtra === '+1 harm') {
+        const boostedHarm = b.harm + 1;
+        return `${b.name}: ${boostedHarm}-harm ${b.range} (+1 harm)`;
+      }
+
+      if (activeExtra === 'ignore-armour') {
+        return `${b.name}: ${baseStatInside} + ignore-armour`;
+      }
+
+      if (activeExtra === 'extra range') {
+        return `${b.name}: ${baseStatInside} + extra range (${selectedExtraRange})`;
+      }
+
+      return `${b.name}: ${baseStatInside} + ${activeExtra}`;
+    };
+
+    const isModeB = selectedBases.length === 2;
+    const isExtraRangeActive = !isModeB && selectedExtras.includes('extra range');
 
     return (
       <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-2.5 space-y-2.5 shadow-xs">
@@ -1237,17 +1360,19 @@ export const PlaybookSubPanel: React.FC<PlaybookSubPanelProps> = ({
             <Skull className="w-3.5 h-3.5 text-red-500" />
             The Monstrous: Curse & Natural Attacks
           </span>
-          <span className="text-[10px] text-red-400/80 font-mono uppercase">Inhuman Nature</span>
+          <span className="text-[10px] text-red-400/80 font-mono uppercase">
+            {isModeB ? 'Mode B: 2 Bases' : 'Mode A: 1 Base + 1 Extra'}
+          </span>
         </div>
 
         {/* Curse Selection (Pick 1) */}
         <div className="space-y-1">
           <span className="text-[11px] font-semibold text-neutral-200">Monstrous Curse (Pick 1):</span>
-          <div className="grid grid-cols-1 gap-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
             {curses.map((c) => (
               <label
                 key={c.id}
-                className={`p-1.5 rounded text-xs border cursor-pointer flex items-center justify-between ${
+                className={`p-1.5 rounded text-xs border cursor-pointer flex items-center justify-between transition-colors ${
                   selectedCurse === c.id
                     ? 'bg-red-950/40 text-red-200 border-red-500 font-bold'
                     : 'bg-neutral-950 text-neutral-400 border-neutral-800 hover:border-neutral-700'
@@ -1261,82 +1386,303 @@ export const PlaybookSubPanel: React.FC<PlaybookSubPanelProps> = ({
                     onChange={() => onUpdateSubFeatures({ ...sub, monstrousCurse: c.id })}
                     className="accent-red-500"
                   />
-                  <span>{c.desc}</span>
+                  <span className="text-[11px]">{c.desc}</span>
                 </div>
               </label>
             ))}
           </div>
         </div>
 
-        {/* Natural Attacks Builder */}
-        <div className="space-y-1.5 pt-1 border-t border-neutral-800">
-          <span className="text-[11px] font-semibold text-red-300">
-            Natural Attacks Builder (Base + Extras):
-          </span>
-
-          {/* Base selector */}
-          <div className="space-y-1">
-            <span className="text-[10px] text-neutral-400 uppercase font-semibold">Base Attack:</span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-              {bases.map((b) => (
-                <button
-                  key={b.id}
-                  onClick={() => onUpdateSubFeatures({ ...sub, naturalAttackBase: b.id })}
-                  className={`px-2 py-1 rounded text-left text-[11px] border cursor-pointer ${
-                    selectedBase === b.id
-                      ? 'bg-neutral-800 text-red-300 border-red-500 font-bold'
-                      : 'bg-neutral-950 text-neutral-400 border-neutral-800'
-                  }`}
-                >
-                  {b.label}
-                </button>
-              ))}
-            </div>
+        {/* Natural Attacks Builder with Strict Validation */}
+        <div className="space-y-2 pt-1 border-t border-neutral-800">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-red-300">
+              Natural Attacks Builder: Pick a Base and 1 Extra, OR Two Bases
+            </span>
+            <span className="text-[10px] text-neutral-400 font-mono">
+              Bases: {selectedBases.length}/2 | Extras: {selectedExtras.length}/{isModeB ? 0 : 1}
+            </span>
           </div>
 
-          {/* Extras selector */}
-          <div className="space-y-1">
-            <span className="text-[10px] text-neutral-400 uppercase font-semibold">
-              Extras ({selectedExtras.length}/2):
+          {/* Rule constraints banner */}
+          <div className="text-[10px] p-1.5 rounded bg-neutral-950/70 border border-neutral-800 flex items-center justify-between text-neutral-300">
+            <span>
+              {isModeB ? (
+                <strong className="text-amber-400">
+                  Mode B active: 2 Bases selected. All Extras disabled (0 extras allowed).
+                </strong>
+              ) : (
+                <span>
+                  <strong className="text-red-400">Mode A active:</strong> 1 Base selected. You may choose <strong>exactly 1 Extra</strong>.
+                </span>
+              )}
             </span>
-            <div className="flex flex-wrap gap-1">
-              {extras.map((ex) => {
-                const active = selectedExtras.includes(ex);
+          </div>
+
+          {/* Base selector (Pick 1 or 2) */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-[10px] text-neutral-400 uppercase font-semibold">
+              <span>Bases Available ({selectedBases.length}/2 selected):</span>
+              <span>Click to toggle</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+              {bases.map((b) => {
+                const isSelected = selectedBases.includes(b.id.toLowerCase());
                 return (
                   <button
-                    key={ex}
-                    onClick={() =>
-                      onUpdateSubFeatures({
-                        ...sub,
-                        naturalAttackExtras: toggleArrayItem(sub.naturalAttackExtras, ex, 2),
-                      })
-                    }
-                    className={`px-2 py-0.5 rounded text-[10px] border cursor-pointer ${
-                      active
-                        ? 'bg-red-600/30 text-red-200 border-red-500 font-bold'
-                        : 'bg-neutral-950 text-neutral-400 border-neutral-800'
+                    key={b.id}
+                    onClick={() => handleToggleBase(b.id)}
+                    className={`px-2 py-1.5 rounded text-left text-[11px] border cursor-pointer transition-colors flex items-center justify-between ${
+                      isSelected
+                        ? 'bg-red-950/60 text-red-200 border-red-500 font-bold shadow-xs'
+                        : 'bg-neutral-950 text-neutral-400 border-neutral-800 hover:border-neutral-700'
                     }`}
                   >
-                    {ex}
+                    <span>{b.label}</span>
+                    <span className="text-[10px] font-mono">
+                      {isSelected ? '✓ Base' : '+ Select'}
+                    </span>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* Computed Natural Attack */}
-          <div className="bg-neutral-950 border border-red-500/40 rounded p-2 text-xs">
-            <span className="text-[10px] text-neutral-400 block uppercase font-mono">
-              Computed Natural Attack:
+          {/* Extras selector (Disabled if 2 bases selected; exactly 1 allowed if 1 base) */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-[10px] text-neutral-400 uppercase font-semibold">
+              <span>Extras Available (1 allowed if 1 Base; 0 if 2 Bases):</span>
+              {isModeB && <span className="text-amber-400 font-normal">Disabled (2 bases chosen)</span>}
+            </div>
+            <div className="grid grid-cols-1 gap-1">
+              {extrasList.map((ex) => {
+                const isActive = !isModeB && selectedExtras.includes(ex.id);
+                return (
+                  <button
+                    key={ex.id}
+                    disabled={isModeB}
+                    onClick={() => handleToggleExtra(ex.id)}
+                    className={`px-2 py-1 rounded text-left text-[11px] border transition-colors flex items-center justify-between ${
+                      isModeB
+                        ? 'bg-neutral-950/40 text-neutral-600 border-neutral-900 cursor-not-allowed opacity-50'
+                        : isActive
+                        ? 'bg-red-600/30 text-red-200 border-red-500 font-bold shadow-xs cursor-pointer'
+                        : 'bg-neutral-950 text-neutral-400 border-neutral-800 hover:border-neutral-700 cursor-pointer'
+                    }`}
+                  >
+                    <span>{ex.label}</span>
+                    <span className="text-[10px] font-mono">
+                      {isModeB ? 'Disabled' : isActive ? '✓ Extra' : '+ Pick Extra'}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Extra Range Sub-Selector if "extra range" is selected */}
+            {isExtraRangeActive && (
+              <div className="p-1.5 rounded bg-neutral-950 border border-neutral-800 flex items-center gap-2 text-[10px]">
+                <span className="text-neutral-400 font-semibold uppercase">Choose extra range:</span>
+                <div className="flex items-center gap-1">
+                  {(['intimate', 'hand', 'close'] as const).map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => handleSelectExtraRange(r)}
+                      className={`px-2 py-0.5 rounded border transition-colors cursor-pointer capitalize ${
+                        selectedExtraRange === r
+                          ? 'bg-red-600 text-white font-bold border-red-500'
+                          : 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:text-white'
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Live Resulting Natural Attack Profile Summary */}
+          <div className="bg-neutral-950 border border-red-500/50 rounded-lg p-2 text-xs space-y-0.5">
+            <span className="text-[10px] text-neutral-400 block uppercase font-mono tracking-wider">
+              Resulting Natural Attack Profile:
             </span>
-            <span className="text-red-300 font-mono font-bold">{computedAttack}</span>
+            <div className="flex items-center justify-between">
+              <span className="text-red-300 font-mono font-bold text-sm tracking-tight">
+                {getSummary()}
+              </span>
+              <button
+                onClick={() => onQuickRoll('tough', `Natural Attack: ${getSummary()}`)}
+                className="px-2 py-0.5 bg-red-950/80 hover:bg-red-900 text-red-200 border border-red-700/60 rounded text-[10px] font-bold cursor-pointer"
+                title="Roll Kick Some Ass with this natural attack"
+              >
+                🎲 Roll Attack
+              </button>
+            </div>
           </div>
         </div>
       </div>
     );
   }
 
-  // 10. ALL OTHER PLAYBOOKS (Generic Special Features & Scratchpad)
+  // 10. THE ACTION SCIENTIST
+  if (playbookLower === 'the action scientist' || playbookLower === 'action scientist') {
+    const areasOfStudy = [
+      {
+        id: 'physics-cosmology',
+        name: 'Physics and Cosmology',
+        icon: '🌌',
+        effect: 'Notice reality alterations. Grants 3 bonus investigate questions (What direction is the source? Is this static or changing? What equipment would tell me more?).',
+      },
+      {
+        id: 'biology-chemistry',
+        name: 'Biology and Chemistry',
+        icon: '🧪',
+        effect: 'Examine mysterious substances to determine biological/non-biological and mundane/supernatural/extraterrestrial/extra-dimensional origin.',
+      },
+      {
+        id: 'neurology-psychology',
+        name: 'Neurology and Psychology',
+        icon: '🧠',
+        stat: 'sharp' as StatType,
+        effect: 'Assess motives with roll +Sharp (10+: human and alignment; 7-9: something off; miss: reveal too much).',
+      },
+      {
+        id: 'computers-electronics',
+        name: 'Computers and Electronics',
+        icon: '💻',
+        stat: 'cool' as StatType,
+        effect: 'Hack/reprogram systems with roll +Cool (10+: full access/change; 7-9: delay or unexpected event; miss: catastrophe).',
+      },
+      {
+        id: 'violence',
+        name: 'Violence',
+        icon: '⚡',
+        effect: 'Roll +Sharp to kick some ass instead of +Tough. On scientific attacks: deal +1 harm or take +1 forward.',
+      },
+      {
+        id: 'mechanics-engineering',
+        name: 'Mechanics and Engineering',
+        icon: '🔧',
+        effect: 'Repair machines rapidly without full tools. Combine any two devices into one hybrid gadget.',
+      },
+      {
+        id: 'space',
+        name: 'Space',
+        icon: '🚀',
+        effect: '+1 ongoing with rocketry/astronaut tasks; access to a space launch facility and spacecraft.',
+      },
+    ];
+
+    const currentFocus = hunter.actionScientistFocus || sub.actionScientistFocus || 'Physics and Cosmology';
+
+    const handleSelectFocus = (focusName: string) => {
+      const updatedSub = { ...sub, actionScientistFocus: focusName };
+      onUpdateSubFeatures(updatedSub);
+      if (onUpdateHunter) {
+        onUpdateHunter({
+          ...hunter,
+          actionScientistFocus: focusName,
+          subFeatures: updatedSub,
+        });
+      }
+    };
+
+    const activeAreaObj = areasOfStudy.find((a) => a.name === currentFocus) || areasOfStudy[0];
+
+    return (
+      <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-2.5 space-y-2.5 shadow-xs">
+        <div className="flex items-center justify-between text-xs font-bold text-cyan-300">
+          <span className="flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+            The Action Scientist: Area of Study
+          </span>
+          <span className="text-[10px] text-cyan-400/80 font-mono uppercase">Pick One Specialization</span>
+        </div>
+
+        <p className="text-[11px] text-neutral-400">
+          Select your primary discipline. Your Area of Study grants unique analytical tools, bonus investigative options, or supernatural countermeasures.
+        </p>
+
+        {/* 7 Area of Study Selection Cards */}
+        <div className="space-y-1.5">
+          {areasOfStudy.map((area) => {
+            const isSelected = currentFocus === area.name;
+            return (
+              <label
+                key={area.id}
+                onClick={() => handleSelectFocus(area.name)}
+                className={`p-2 rounded-lg border text-left transition-colors cursor-pointer block ${
+                  isSelected
+                    ? 'bg-cyan-950/40 border-cyan-500/70 text-cyan-100 shadow-xs'
+                    : 'bg-neutral-950/80 border-neutral-800 text-neutral-400 hover:border-neutral-700'
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="action-scientist-focus"
+                      checked={isSelected}
+                      onChange={() => handleSelectFocus(area.name)}
+                      className="accent-cyan-400 shrink-0 mt-0.5"
+                    />
+                    <span className="text-base leading-none">{area.icon}</span>
+                    <span className={`text-xs font-bold ${isSelected ? 'text-cyan-200' : 'text-neutral-200'}`}>
+                      {area.name}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    {area.stat && (
+                      <span className="text-[10px] px-1.5 py-0.2 bg-neutral-800 text-cyan-300 rounded font-mono font-bold">
+                        +{area.stat}
+                      </span>
+                    )}
+                    {isSelected && (
+                      <span className="text-[10px] text-cyan-400 font-bold">✓ Active Focus</span>
+                    )}
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-neutral-300 mt-1 pl-6 leading-relaxed">
+                  {area.effect}
+                </p>
+
+                {isSelected && area.stat && (
+                  <div className="mt-2 pl-6 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onQuickRoll(area.stat!, `${area.name}: Research Roll`);
+                      }}
+                      className="px-2 py-0.5 bg-cyan-600/30 hover:bg-cyan-500 text-cyan-200 hover:text-neutral-950 border border-cyan-500/60 rounded text-[10px] font-bold cursor-pointer transition-colors"
+                    >
+                      🎲 Roll +{area.stat.toUpperCase()} ({area.name})
+                    </button>
+                  </div>
+                )}
+              </label>
+            );
+          })}
+        </div>
+
+        {/* Active Focus Callout Card */}
+        <div className="bg-neutral-950 border border-cyan-500/40 rounded p-2 text-xs space-y-1">
+          <div className="flex items-center justify-between text-[10px] text-neutral-400 uppercase font-mono">
+            <span>Saved on Hunter Record (hunter.actionScientistFocus):</span>
+            <span className="text-cyan-400 font-bold">{activeAreaObj.name}</span>
+          </div>
+          <p className="text-[11px] text-cyan-200">
+            {activeAreaObj.icon} <strong>{activeAreaObj.name}:</strong> {activeAreaObj.effect}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // 11. ALL OTHER PLAYBOOKS (Generic Special Features & Scratchpad)
   const currentDef = PLAYBOOKS.find(
     (p) => p.name.toLowerCase() === hunter.playbook.toLowerCase() || p.id === hunter.playbook.toLowerCase()
   );

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { HunterProfile, HunterScopedNotes, TableNotesData, KeeperNoteCard, BroadcastPayload } from '../types/motw';
-import { Eye, EyeOff, Plus, Trash2, ChevronDown, ChevronRight, Save, Clock, Lock, Shield, FileText } from 'lucide-react';
+import { Eye, EyeOff, Plus, Trash2, ChevronDown, ChevronRight, Save, Clock, Lock, Shield, FileText, HelpCircle, Award, CheckSquare, Square, RotateCcw } from 'lucide-react';
 
 interface NotesTabProps {
   activeHunter: HunterProfile | null;
@@ -10,6 +10,7 @@ interface NotesTabProps {
   onUpdateTableNotes: (data: TableNotesData) => void;
   activeBroadcast: BroadcastPayload | null;
   onUpdateBroadcast: (payload: BroadcastPayload | null) => void;
+  onUpdateHunter?: (hunter: HunterProfile) => void;
 }
 
 const DEFAULT_HUNTER_NOTES: HunterScopedNotes = {
@@ -27,6 +28,7 @@ export const NotesTab: React.FC<NotesTabProps> = ({
   onUpdateTableNotes,
   activeBroadcast,
   onUpdateBroadcast,
+  onUpdateHunter,
 }) => {
   // Scope selector: hunter | table | keeper
   const [activeScope, setActiveScope] = useState<'hunter' | 'table' | 'keeper'>('hunter');
@@ -72,6 +74,42 @@ export const NotesTab: React.FC<NotesTabProps> = ({
     } catch {
       // ignore
     }
+  };
+
+  // End of Session State
+  const [isEndOfSessionOpen, setIsEndOfSessionOpen] = useState(false);
+  const [sessionAnswers, setSessionAnswers] = useState<Record<number, boolean>>({});
+  const [awardedFeedback, setAwardedFeedback] = useState<string | null>(null);
+
+  const officialQuestions = [
+    'Did we conclude the current mystery?',
+    'Did we save someone from certain death (or worse)?',
+    'Did we learn something new and important about the world?',
+    'Did we learn something new and important about one of the hunters?',
+  ];
+
+  const yesCount = [0, 1, 2, 3].filter((i) => sessionAnswers[i]).length;
+  const xpToAward = yesCount === 0 ? 0 : yesCount <= 2 ? 1 : 2;
+  const xpAwardLabel = yesCount === 0 ? '0 XP' : yesCount <= 2 ? 'Mark 1 Experience box' : 'Mark 2 Experience boxes';
+
+  const handleApplyXpToHunter = () => {
+    if (!activeHunter || !onUpdateHunter || xpToAward === 0) return;
+    const currentXp = activeHunter.experience || 0;
+    const newXp = Math.min(5, currentXp + xpToAward);
+    onUpdateHunter({
+      ...activeHunter,
+      experience: newXp,
+    });
+    setAwardedFeedback(`Awarded +${xpToAward} XP to ${activeHunter.name}! (Now ${newXp}/5)`);
+    setTimeout(() => setAwardedFeedback(null), 4000);
+  };
+
+  const handleLogReviewToTableNotes = () => {
+    const formattedDate = new Date().toLocaleDateString();
+    const summary = `\n\n--- [End of Session Review: ${formattedDate}] ---\nQuestions Answered YES: ${yesCount}/4\n• Concluded mystery? ${sessionAnswers[0] ? 'YES' : 'NO'}\n• Saved someone? ${sessionAnswers[1] ? 'YES' : 'NO'}\n• Learned about the world? ${sessionAnswers[2] ? 'YES' : 'NO'}\n• Learned about a hunter? ${sessionAnswers[3] ? 'YES' : 'NO'}\nOutcome: ${xpAwardLabel}\n---------------------------------------------`;
+    handleTableTextChange(tableText + summary);
+    setAwardedFeedback('Logged session debrief to Table Notes!');
+    setTimeout(() => setAwardedFeedback(null), 4000);
   };
 
   // Table Notes local buffer + 400ms debounced autosave
@@ -259,6 +297,137 @@ export const NotesTab: React.FC<NotesTabProps> = ({
           </button>
         </div>
       </div>
+
+      {/* End of Session Review Quick Trigger Bar */}
+      <div className="px-2.5 py-1 bg-neutral-900 border-b border-neutral-800 flex items-center justify-between text-xs shrink-0">
+        <button
+          onClick={() => setIsEndOfSessionOpen(!isEndOfSessionOpen)}
+          className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer border ${
+            isEndOfSessionOpen
+              ? 'bg-indigo-600 text-white border-indigo-400 shadow-xs'
+              : 'bg-indigo-950/60 text-indigo-300 border-indigo-700/50 hover:bg-indigo-900/60'
+          }`}
+        >
+          <HelpCircle className="w-3.5 h-3.5 text-indigo-400" />
+          <span>End of Session Questions & XP Tracker</span>
+          <span className="text-[10px] px-1.5 py-0.2 rounded bg-neutral-950 font-mono text-amber-300">
+            {yesCount}/4 YES ({xpAwardLabel})
+          </span>
+        </button>
+
+        {awardedFeedback && (
+          <span className="text-[11px] text-emerald-400 font-semibold animate-pulse">
+            ✓ {awardedFeedback}
+          </span>
+        )}
+      </div>
+
+      {/* Interactive End of Session Review Panel */}
+      {isEndOfSessionOpen && (
+        <div className="bg-neutral-900 border-b border-indigo-800/80 p-3 space-y-2.5 shrink-0 max-h-[50%] overflow-y-auto text-neutral-100 shadow-xl">
+          <div className="flex items-center justify-between border-b border-neutral-800 pb-1.5">
+            <div className="flex items-center gap-1.5">
+              <Award className="w-4 h-4 text-amber-400" />
+              <span className="font-bold text-xs text-indigo-200">
+                End of Session Official Ruling: The 4 Questions
+              </span>
+            </div>
+            <button
+              onClick={() => setIsEndOfSessionOpen(false)}
+              className="text-neutral-400 hover:text-white text-xs px-1 cursor-pointer"
+            >
+              ✕ Close
+            </button>
+          </div>
+
+          <p className="text-[11px] text-neutral-300 leading-relaxed">
+            At the end of each session, the Keeper asks the 4 questions:
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+            {officialQuestions.map((q, idx) => {
+              const checked = !!sessionAnswers[idx];
+              return (
+                <label
+                  key={idx}
+                  className={`p-2 rounded border flex items-start gap-2 cursor-pointer transition-colors text-xs ${
+                    checked
+                      ? 'bg-indigo-950/60 border-indigo-500 text-indigo-100 font-medium'
+                      : 'bg-neutral-950 border-neutral-800 text-neutral-300 hover:border-neutral-700'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(e) =>
+                      setSessionAnswers((prev) => ({
+                        ...prev,
+                        [idx]: e.target.checked,
+                      }))
+                    }
+                    className="accent-indigo-500 mt-0.5"
+                  />
+                  <div className="flex-1">
+                    <span className="font-semibold text-neutral-200 block">{idx + 1}. {q}</span>
+                  </div>
+                  <span className="text-[10px] font-mono shrink-0 text-neutral-400">
+                    {checked ? '✓ YES' : 'NO'}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+
+          {/* Official Rule & Logic Breakdown */}
+          <div className="p-2 rounded bg-neutral-950 border border-neutral-800 flex items-center justify-between flex-wrap gap-2 text-xs">
+            <div className="space-y-0.5">
+              <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wider block">
+                XP Award Logic:
+              </span>
+              <span className="text-[11px] text-neutral-300 block">
+                • 0 "Yes" answers = 0 XP &nbsp;|&nbsp; • 1 or 2 "Yes" answers = Mark 1 Experience box &nbsp;|&nbsp; • 3 or 4 "Yes" answers = Mark 2 Experience boxes
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-amber-300 bg-amber-950/60 border border-amber-600/50 px-2 py-1 rounded">
+                Award: {xpAwardLabel}
+              </span>
+            </div>
+          </div>
+
+          {/* Action Row */}
+          <div className="flex items-center justify-between gap-2 pt-1 border-t border-neutral-800 flex-wrap">
+            <button
+              onClick={() => setSessionAnswers({})}
+              className="px-2 py-1 text-xs text-neutral-400 hover:text-white flex items-center gap-1 cursor-pointer"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Reset Questions</span>
+            </button>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleLogReviewToTableNotes}
+                className="px-2.5 py-1 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 border border-neutral-700 rounded text-xs font-medium cursor-pointer transition-colors"
+              >
+                Log to Table Notes
+              </button>
+
+              {activeHunter && onUpdateHunter && (
+                <button
+                  onClick={handleApplyXpToHunter}
+                  disabled={xpToAward === 0}
+                  className="px-3 py-1 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-neutral-950 font-bold rounded text-xs cursor-pointer shadow transition-colors flex items-center gap-1"
+                >
+                  <Award className="w-3.5 h-3.5" />
+                  <span>Award +{xpToAward} XP to {activeHunter.name}</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Scope 1: Hunter Notes */}
       {activeScope === 'hunter' && (

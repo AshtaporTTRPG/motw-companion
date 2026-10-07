@@ -83,7 +83,11 @@ export interface PlaybookSubFeatures {
   // The Monstrous
   monstrousCurse?: string;
   naturalAttackBase?: string;
+  naturalAttackBases?: string[];
   naturalAttackExtras?: string[];
+  naturalAttackExtraRange?: string;
+  // The Action Scientist
+  actionScientistFocus?: string;
   // Generic / Scratchpad
   genericNotes?: string;
   genericChecklist?: string[];
@@ -125,6 +129,7 @@ export interface HunterProfile {
   borrowedMoves?: BorrowedMove[];
   customMoves?: CustomMove[];
   subFeatures?: PlaybookSubFeatures;
+  actionScientistFocus?: string;
   createdAt: number;
 }
 

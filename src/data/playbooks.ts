@@ -1516,20 +1516,24 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
 export const PLAYBOOKS_DATA: PlaybookDefinition[] = PLAYBOOKS;
 
 /**
- * Automated Playbook Integrity Validator
- * Runs on module load to guarantee all 28 canonical playbooks meet MotW system standards.
+ * Automated Runtime Playbook Data Audit & Schema Integrity Check
+ * Runs when the app mounts to verify all 28 playbooks satisfy Monster of the Week standards:
+ * - Exactly 5 valid rating lines with numerical attributes
+ * - Moves array populated with full trigger and outcome text
+ * - Defined luckSpecial string
+ * - Defined starting gear options
  */
 export function validatePlaybookIntegrity(playbooks: PlaybookDefinition[]): boolean {
   const issues: string[] = [];
 
-  if (playbooks.length !== 28) {
-    issues.push(`Expected 28 canonical playbooks, but found ${playbooks.length}`);
+  if (!Array.isArray(playbooks) || playbooks.length !== 28) {
+    issues.push(`Expected 28 canonical playbooks, but found ${playbooks?.length ?? 0}`);
   }
 
   playbooks.forEach((p) => {
-    // Exactly 5 valid rating lines
+    // 1. Exactly 5 valid rating lines
     if (!Array.isArray(p.statOptions) || p.statOptions.length !== 5) {
-      issues.push(`[${p.name}] Must have exactly 5 stat options lines (found ${p.statOptions?.length || 0})`);
+      issues.push(`[${p.name}] Must have exactly 5 stat options rating lines (found ${p.statOptions?.length || 0})`);
     } else {
       p.statOptions.forEach((s, idx) => {
         if (
@@ -1539,45 +1543,45 @@ export function validatePlaybookIntegrity(playbooks: PlaybookDefinition[]): bool
           typeof s.tough !== 'number' ||
           typeof s.weird !== 'number'
         ) {
-          issues.push(`[${p.name}] Stat option line ${idx + 1} has invalid ratings`);
+          issues.push(`[${p.name}] Stat option line ${idx + 1} has invalid or missing rating numbers`);
         }
       });
     }
 
-    // Non-empty moves array where every move has a name and description
+    // 2. Specific moves array populated with full trigger and outcome text
     if (!Array.isArray(p.moves) || p.moves.length === 0) {
-      issues.push(`[${p.name}] Must have a non-empty moves array`);
+      issues.push(`[${p.name}] Missing moves array or has 0 moves defined`);
     } else {
       p.moves.forEach((m, idx) => {
         if (!m.name || !m.name.trim()) {
           issues.push(`[${p.name}] Move at index ${idx} is missing a name`);
         }
         if (!m.description || !m.description.trim()) {
-          issues.push(`[${p.name}] Move "${m.name || idx}" is missing a description`);
+          issues.push(`[${p.name}] Move "${m.name || idx}" is missing full trigger and outcome text`);
         }
       });
     }
 
-    // Defined luck special text
+    // 3. Defined luckSpecial string
     if (!p.luckSpecial || typeof p.luckSpecial !== 'string' || !p.luckSpecial.trim()) {
-      issues.push(`[${p.name}] Must have defined luck special text`);
+      issues.push(`[${p.name}] Must have a defined luckSpecial string`);
     }
 
-    // Starting gear lists
+    // 4. Defined gear options
     if (!Array.isArray(p.gearChoices) || p.gearChoices.length === 0) {
-      issues.push(`[${p.name}] Must have a non-empty starting gear list`);
+      issues.push(`[${p.name}] Must have gear options defined`);
     }
   });
 
   if (issues.length > 0) {
-    console.warn('[MOTW Companion] Playbook integrity verification warnings:\n' + issues.join('\n'));
+    console.warn(`[MOTW Companion] Playbook Data Audit warning — ${issues.length} issue(s) detected:\n` + issues.join('\n'));
     return false;
   }
 
-  console.log('[MOTW Companion] All 28 playbooks verified successfully.');
+  console.log(`[MOTW Companion] Playbook Data Audit passed: all ${playbooks.length} playbooks verified successfully.`);
   return true;
 }
 
-// Execute once on load
+// Module load check
 validatePlaybookIntegrity(PLAYBOOKS);
 

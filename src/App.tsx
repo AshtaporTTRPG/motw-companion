@@ -17,7 +17,7 @@ import {
   TableNotesData,
   BroadcastPayload,
 } from './types/motw';
-import { PLAYBOOKS } from './data/playbooks';
+import { PLAYBOOKS, validatePlaybookIntegrity } from './data/playbooks';
 import { executePbtaRoll } from './utils/rollEngine';
 import { Eye, Bell, X, ShieldAlert } from 'lucide-react';
 
@@ -140,6 +140,11 @@ export default function App() {
 
   // Debounce timers for room metadata writes (400ms debounce to prevent race conditions)
   const debounceTimersRef = useRef<Record<string, any>>({});
+
+  // Automated Playbook Data Audit & Schema Integrity Check (Runs once when app mounts)
+  useEffect(() => {
+    validatePlaybookIntegrity(PLAYBOOKS);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -480,6 +485,7 @@ export default function App() {
               onUpdateTableNotes={handleUpdateTableNotes}
               activeBroadcast={broadcast}
               onUpdateBroadcast={handleUpdateBroadcast}
+              onUpdateHunter={handleUpdateHunter}
             />
           )}
         </main>

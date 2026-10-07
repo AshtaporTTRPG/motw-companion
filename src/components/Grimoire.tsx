@@ -15,6 +15,7 @@ export const Grimoire: React.FC<GrimoireProps> = ({ onQuickRollMove }) => {
     'kick-some-ass': true,
     'investigate-a-mystery': true,
   });
+  const [grimoireSessionAnswers, setGrimoireSessionAnswers] = useState<Record<number, boolean>>({});
 
   const toggleExpand = (id: string) => {
     setExpandedMoveIds((prev) => ({
@@ -260,16 +261,100 @@ export const Grimoire: React.FC<GrimoireProps> = ({ onQuickRollMove }) => {
               </div>
             </div>
 
-            {/* End of session questions */}
-            <div className="bg-neutral-950/50 p-2 rounded border border-neutral-850 space-y-1">
-              <span className="font-bold text-indigo-300 text-[11px] flex items-center gap-1">
-                <HelpCircle className="w-3 h-3" /> End of Session Questions:
-              </span>
-              <ul className="list-disc list-inside space-y-0.5 text-xs text-neutral-300">
-                {QUICK_RULES.endOfSessionQuestions.map((q, i) => (
-                  <li key={i}>{q}</li>
-                ))}
-              </ul>
+            {/* End of Session Ruling & Interactive Tracker */}
+            <div className="bg-neutral-950/70 p-2.5 rounded-lg border border-indigo-900/50 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-indigo-300 text-xs flex items-center gap-1.5">
+                  <HelpCircle className="w-3.5 h-3.5 text-indigo-400" /> End of Session Ruling & Experience Tracker
+                </span>
+                <span className="text-[10px] text-indigo-400/80 font-mono uppercase">Official Rule</span>
+              </div>
+
+              <p className="text-[11px] text-neutral-300">
+                At the end of each session, the Keeper asks the 4 questions:
+              </p>
+
+              {/* 4 Interactive Questions */}
+              <div className="space-y-1.5">
+                {[
+                  '1. Did we conclude the current mystery?',
+                  '2. Did we save someone from certain death (or worse)?',
+                  '3. Did we learn something new and important about the world?',
+                  '4. Did we learn something new and important about one of the hunters?',
+                ].map((questionText, idx) => {
+                  const isChecked = !!grimoireSessionAnswers[idx];
+                  return (
+                    <label
+                      key={idx}
+                      className={`flex items-start gap-2 p-1.5 rounded border transition-colors cursor-pointer text-xs ${
+                        isChecked
+                          ? 'bg-indigo-950/50 border-indigo-500/70 text-indigo-200 font-medium'
+                          : 'bg-neutral-900 border-neutral-800 text-neutral-300 hover:border-neutral-700'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) =>
+                          setGrimoireSessionAnswers((prev) => ({
+                            ...prev,
+                            [idx]: e.target.checked,
+                          }))
+                        }
+                        className="accent-indigo-500 mt-0.5 rounded cursor-pointer"
+                      />
+                      <span className="flex-1 leading-snug">{questionText}</span>
+                      <span className="text-[10px] font-mono text-neutral-400 shrink-0">
+                        {isChecked ? '✓ YES' : 'NO'}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              {/* Official XP Award Logic */}
+              <div className="bg-neutral-900/90 rounded p-2 border border-neutral-800 text-xs space-y-1">
+                <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-wide block">
+                  XP Award Logic:
+                </span>
+                <ul className="text-[11px] text-neutral-300 space-y-0.5">
+                  <li className={Object.values(grimoireSessionAnswers).filter(Boolean).length === 0 ? 'text-amber-400 font-bold' : ''}>
+                    • <strong>0 "Yes" answers</strong> = 0 XP
+                  </li>
+                  <li className={[1, 2].includes(Object.values(grimoireSessionAnswers).filter(Boolean).length) ? 'text-amber-400 font-bold' : ''}>
+                    • <strong>1 or 2 "Yes" answers</strong> = Mark 1 Experience box
+                  </li>
+                  <li className={[3, 4].includes(Object.values(grimoireSessionAnswers).filter(Boolean).length) ? 'text-amber-400 font-bold' : ''}>
+                    • <strong>3 or 4 "Yes" answers</strong> = Mark 2 Experience boxes
+                  </li>
+                </ul>
+              </div>
+
+              {/* Live XP Calculator Result */}
+              {(() => {
+                const yesCount = Object.values(grimoireSessionAnswers).filter(Boolean).length;
+                const awardText = yesCount === 0 ? '0 XP' : yesCount <= 2 ? 'Mark 1 Experience box' : 'Mark 2 Experience boxes';
+                return (
+                  <div className="flex items-center justify-between p-1.5 rounded bg-indigo-950/40 border border-indigo-700/60 text-xs">
+                    <span className="text-neutral-300">
+                      Answered YES: <strong className="text-white font-mono">{yesCount}/4</strong>
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-indigo-200 font-bold">
+                        Award: <span className="text-amber-300">{awardText}</span>
+                      </span>
+                      {yesCount > 0 && (
+                        <button
+                          onClick={() => setGrimoireSessionAnswers({})}
+                          className="text-[10px] text-neutral-400 hover:text-white underline cursor-pointer"
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}

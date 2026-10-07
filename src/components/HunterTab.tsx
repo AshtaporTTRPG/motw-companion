@@ -174,6 +174,8 @@ export const HunterTab: React.FC<HunterTabProps> = ({
           gear: parsed.gear || '',
           luckSpecial: parsed.luckSpecial || '',
           improvementsTaken: Array.isArray(parsed.improvementsTaken) ? parsed.improvementsTaken : [],
+          subFeatures: parsed.subFeatures || {},
+          actionScientistFocus: parsed.actionScientistFocus || parsed.subFeatures?.actionScientistFocus,
           ownerId: parsed.ownerId || currentUserId,
           ownerName: parsed.ownerName || currentUserName,
           createdAt: parsed.createdAt || Date.now(),
@@ -603,8 +605,13 @@ export const HunterTab: React.FC<HunterTabProps> = ({
                   placeholder="Hunter Name"
                   className="bg-transparent text-sm font-extrabold text-amber-300 focus:outline-none focus:border-b border-amber-500 w-full"
                 />
-                <div className="flex items-center gap-2 text-xs text-neutral-400">
+                <div className="flex items-center gap-2 text-xs text-neutral-400 flex-wrap">
                   <span className="font-semibold text-neutral-200">{activeHunter.playbook}</span>
+                  {(activeHunter.actionScientistFocus || activeHunter.subFeatures?.actionScientistFocus) && (
+                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-300 border border-cyan-700/60 font-medium">
+                      🔬 {activeHunter.actionScientistFocus || activeHunter.subFeatures?.actionScientistFocus}
+                    </span>
+                  )}
                   <span>•</span>
                   <span className="text-[11px] text-neutral-400">Owner: {activeHunter.ownerName}</span>
                 </div>
@@ -923,6 +930,7 @@ export const HunterTab: React.FC<HunterTabProps> = ({
           {/* Dynamic Playbook-Specific Sub-System Panel */}
           <PlaybookSubPanel
             hunter={activeHunter}
+            onUpdateHunter={onUpdateHunter}
             onUpdateSubFeatures={(updatedSub) =>
               onUpdateHunter({
                 ...activeHunter,

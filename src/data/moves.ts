@@ -296,10 +296,30 @@ export const QUICK_RULES = {
     'Once all 7 Luck boxes are marked, your luck is exhausted. The Keeper can now make merciless hard moves against you without warning, and your playbook’s Luck Special doom triggers!',
   ],
   endOfSessionQuestions: [
-    'Did we conclude the current mystery or uncover a vital truth?',
-    'Did we save someone from certain death or monstrous torment?',
-    'Did we learn something new and important about the supernatural?',
-    'Did each hunter act according to their character’s flaws and drives?',
-    'Rule: If the group answers YES to 3 or more questions, each hunter marks 1 Experience!',
+    'Did we conclude the current mystery?',
+    'Did we save someone from certain death (or worse)?',
+    'Did we learn something new and important about the world?',
+    'Did we learn something new and important about one of the hunters?',
+    'XP Award Logic:',
+    '• 0 "Yes" answers = 0 XP',
+    '• 1 or 2 "Yes" answers = Mark 1 Experience box',
+    '• 3 or 4 "Yes" answers = Mark 2 Experience boxes',
   ],
 };
+
+export const OFFICIAL_END_OF_SESSION_QUESTIONS = [
+  'Did we conclude the current mystery?',
+  'Did we save someone from certain death (or worse)?',
+  'Did we learn something new and important about the world?',
+  'Did we learn something new and important about one of the hunters?',
+];
+
+export function calculateEndOfSessionXP(yesCount: number): { xp: number; label: string } {
+  if (yesCount <= 0) {
+    return { xp: 0, label: '0 XP' };
+  } else if (yesCount <= 2) {
+    return { xp: 1, label: 'Mark 1 Experience box' };
+  } else {
+    return { xp: 2, label: 'Mark 2 Experience boxes' };
+  }
+}
