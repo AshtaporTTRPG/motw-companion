@@ -46,7 +46,7 @@ const SEED_HUNTER: HunterProfile = {
   },
   selectedMoves: ['expert-i-have-read-about-this', 'expert-preparedness'],
   gear: 'Shotgun (3-harm close reload messy)\nSilver hunting dagger\nOld occult library cards',
-  luckSpecial: PLAYBOOKS[1].luckSpecial,
+  luckSpecial: PLAYBOOKS.find((p) => p.id === 'the-expert')?.luckSpecial || PLAYBOOKS[0].luckSpecial,
   improvementsTaken: [],
   levelUpCount: 0,
   advancementsTaken: [],

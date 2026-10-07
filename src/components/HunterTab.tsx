@@ -455,11 +455,15 @@ export const HunterTab: React.FC<HunterTabProps> = ({
           {allHunters.length === 0 ? (
             <option value="">No Hunters Created</option>
           ) : (
-            allHunters.map((h) => (
-              <option key={h.id} value={h.id}>
-                {h.name} — {h.playbook} {h.ownerId === currentUserId ? '(You)' : `(${h.ownerName})`}
-              </option>
-            ))
+            allHunters.map((h) => {
+              const basicCount = Math.min(h.levelUpCount || 0, 5);
+              const advCount = Math.max(0, (h.levelUpCount || 0) - 5);
+              return (
+                <option key={h.id} value={h.id}>
+                  {h.name} — Basic ({basicCount}/5) Advanced ({advCount})
+                </option>
+              );
+            })
           )}
         </select>
 
@@ -619,6 +623,9 @@ export const HunterTab: React.FC<HunterTabProps> = ({
           <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-2.5 space-y-2 shadow-xs">
             <div className="flex items-start justify-between gap-2">
               <div className="space-y-0.5 min-w-0">
+                <div className="text-xs font-bold text-amber-400 font-mono">
+                  {activeHunter.name} — Basic ({Math.min(activeHunter.levelUpCount || 0, 5)}/5) Advanced ({Math.max(0, (activeHunter.levelUpCount || 0) - 5)})
+                </div>
                 <input
                   type="text"
                   value={activeHunter.name}
@@ -764,7 +771,7 @@ export const HunterTab: React.FC<HunterTabProps> = ({
                   <Clover className="w-4 h-4 text-emerald-400" />
                   <span className="text-xs font-bold text-neutral-200">Luck Tracker</span>
                   <span className="text-[10px] font-mono text-amber-300">
-                    ({7 - activeHunter.luck} Left / 7 Spent)
+                    Luck: {activeHunter.luck}/7 spent ({7 - activeHunter.luck} remaining) [{activeHunter.luck >= 7 ? 'Doomed' : 'Okay'}]
                   </span>
                 </div>
 
@@ -1340,72 +1347,6 @@ export const HunterTab: React.FC<HunterTabProps> = ({
                       </div>
                     );
                   })}
-                </div>
-              );
-            })()}
-
-            {/* Active Weapon Attacks (Kick Some Ass Action Triggers) */}
-            {(() => {
-              const selectedList = activeHunter.selectedGear || [];
-              const rawGearLines = (activeHunter.gear || '')
-                .split('\n')
-                .map((l) => l.trim())
-                .filter(Boolean);
-
-              // Gather all weapon/attack items from selected chips and custom gear
-              const allAttackStrings = Array.from(
-                new Set([
-                  ...selectedList.filter((item) => isAttackItem(item)),
-                  ...rawGearLines.filter((line) => isAttackItem(line)),
-                ])
-              );
-
-              if (allAttackStrings.length === 0) {
-                return (
-                  <div className="p-2 rounded bg-neutral-950/40 border border-neutral-800/60 text-center text-[11px] text-neutral-500 italic">
-                    Select weapons above to activate direct Kick Some Ass attack buttons.
-                  </div>
-                );
-              }
-
-              return (
-                <div className="space-y-1.5 pt-2 border-t border-neutral-800/80">
-                  <div className="flex items-center justify-between text-xs font-bold text-red-300">
-                    <span className="flex items-center gap-1.5">
-                      <span>⚔️</span> Kick Some Ass Attack Triggers
-                    </span>
-                    <span className="text-[10px] text-neutral-400 font-mono">
-                      Dynamic Stat Override Active
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-1.5">
-                    {allAttackStrings.map((item) => {
-                      const cleanName = extractCleanWeaponName(item);
-                      const stat = getAttackRollStat(activeHunter, { attackName: cleanName });
-                      const buttonLabel = getAttackButtonLabel(cleanName, activeHunter);
-                      const statMod = activeHunter.stats[stat] ?? 0;
-                      const statFormatted = stat.charAt(0).toUpperCase() + stat.slice(1);
-
-                      return (
-                        <button
-                          key={item}
-                          type="button"
-                          onClick={() => onQuickRoll(stat, `Kick Some Ass (${cleanName})`)}
-                          className="w-full px-2.5 py-1.5 bg-red-950/70 hover:bg-red-900/90 text-red-100 hover:text-white border border-red-700/60 rounded text-xs font-bold flex items-center justify-between shadow-xs transition-colors cursor-pointer group"
-                          title={`Roll Kick Some Ass with ${cleanName} (+${statFormatted})`}
-                        >
-                          <span className="flex items-center gap-1.5 truncate">
-                            <span className="group-hover:scale-110 transition-transform">⚔️</span>
-                            <span className="truncate">{buttonLabel}</span>
-                          </span>
-                          <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-red-900/60 text-red-200 border border-red-700/40 shrink-0 ml-2">
-                            +{statFormatted} ({statMod >= 0 ? `+${statMod}` : statMod})
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
                 </div>
               );
             })()}
