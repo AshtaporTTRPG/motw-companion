@@ -16,6 +16,7 @@ import {
   StatType,
   TableNotesData,
   BroadcastPayload,
+  KeeperMysteryData,
 } from './types/motw';
 import { PLAYBOOKS, validatePlaybookIntegrity } from './data/playbooks';
 import { executePbtaRoll } from './utils/rollEngine';
@@ -25,6 +26,92 @@ const METADATA_HUNTERS = 'com.motw.companion/hunters';
 const METADATA_ROLL_FEED = 'com.motw.companion/roll-feed';
 const METADATA_TABLE_NOTES = 'com.motw.companion/table-notes';
 const METADATA_BROADCAST = 'com.motw.companion/broadcast';
+const METADATA_KEEPER_MYSTERY = 'com.motw.companion/keeper-mystery';
+
+const DEFAULT_KEEPER_MYSTERY: KeeperMysteryData = {
+  clocks: [
+    {
+      id: 'clock-main',
+      title: 'Main Mystery: The Beast of Blackwood',
+      currentStage: 2,
+      stageDescriptions: {
+        Day: 'Disappearances along the wooded ridge trail; hikers report uncanny animal howls.',
+        Shadows: 'A park ranger is found drained and mauled in the abandoned fire watchtower.',
+        Sunset: 'Local cell tower loses power; the forest goes unnaturally dead and silent.',
+        Dusk: 'The Beast storms the Whispering Pines lodge, trapping panicked survivors inside.',
+        Nightfall: 'Blizzard cuts off the mountain road; the pack surrounds all exits.',
+        Midnight: 'The ancient ritual complete; the Beast awakens fully and consumes the valley.',
+      },
+    },
+    {
+      id: 'clock-sub',
+      title: 'Sub-plot: The Dam Failure & Cult Ritual',
+      currentStage: 0,
+      stageDescriptions: {
+        Day: 'Minor seismic tremors crack the foundation of the old Blackwood Dam.',
+        Shadows: 'Cultists infiltrate the municipal water treatment facility with tainted vials.',
+        Sunset: 'Floodgates jammed by occult talismans; water level rises dangerously.',
+        Dusk: 'Cultists begin chanting on the spillway bridge under blood-red clouds.',
+        Nightfall: 'Dam structural integrity compromised; emergency alarms echo across the town.',
+        Midnight: 'The dam collapses, washing away the historic town center to summon the Leviathan.',
+      },
+    },
+  ],
+  threats: [
+    {
+      id: 'threat-1',
+      name: 'The Blackwood Beast',
+      threatType: 'Monster',
+      motivation: 'To devour and terrorize trespassers on its sacred hunting grounds',
+      harm: 3,
+      maxHarm: 10,
+      isUnstable: false,
+      armor: 1,
+      weakness: 'Pure silver blessed by fire, pierced through the heart',
+      attacks: 'Rending Claws (3-harm hand messy), Terrifying Howl (1-harm area terror)',
+      notes: 'Hunts during twilight. Avoids running water. Can mimic human voices from loved ones.',
+    },
+    {
+      id: 'threat-2',
+      name: 'Cult Fanatics',
+      threatType: 'Minion',
+      motivation: "To follow the prophet's orders at all costs and open the gate",
+      harm: 1,
+      maxHarm: 4,
+      isUnstable: false,
+      armor: 0,
+      weakness: 'Breaking the occult symbol on their amulets shatters their fanatical resolve',
+      attacks: 'Ceremonial Daggers (2-harm hand), Hunting Rifles (2-harm close reload)',
+      notes: 'Concealed under heavy dark coats. Communicates through whistle codes.',
+    },
+    {
+      id: 'threat-3',
+      name: 'Sheriff Martha Evans',
+      threatType: 'Bystander',
+      motivation: 'To protect the town and preserve law and order (Official)',
+      harm: 0,
+      maxHarm: 0,
+      isUnstable: false,
+      armor: 0,
+      weakness: '',
+      attacks: 'Service Revolver (2-harm close reload loud)',
+      notes: 'Suspicious of out-of-towners. Will arrest hunters if weapons are brandished openly.',
+    },
+    {
+      id: 'threat-4',
+      name: 'Blackwood Hydroelectric Dam',
+      threatType: 'Location',
+      motivation: 'To crush and drown all beneath it (Hazard)',
+      harm: 0,
+      maxHarm: 0,
+      isUnstable: false,
+      armor: 0,
+      weakness: 'Accessing emergency manual release valve in sub-level B',
+      attacks: '',
+      notes: 'Built in 1934 over ancient indigenous burial cairns. Rumored structural faults.',
+    },
+  ],
+};
 
 const SEED_HUNTER: HunterProfile = {
   id: 'hunter-seed-1',
@@ -129,6 +216,17 @@ export default function App() {
     return null;
   });
 
+  // Keeper Mystery Dashboard (Clocks & Threats synced to room metadata)
+  const [keeperMystery, setKeeperMystery] = useState<KeeperMysteryData>(() => {
+    try {
+      const saved = localStorage.getItem('motw_companion_keeper_mystery');
+      if (saved) return JSON.parse(saved);
+    } catch {
+      // fallback
+    }
+    return DEFAULT_KEEPER_MYSTERY;
+  });
+
   // User dismissed broadcast local state
   const [dismissedBroadcastId, setDismissedBroadcastId] = useState<string | null>(null);
 
@@ -212,6 +310,9 @@ export default function App() {
           if (metadata[METADATA_BROADCAST]) {
             setBroadcast(metadata[METADATA_BROADCAST] as BroadcastPayload);
           }
+          if (metadata[METADATA_KEEPER_MYSTERY]) {
+            setKeeperMystery(metadata[METADATA_KEEPER_MYSTERY] as KeeperMysteryData);
+          }
 
           // Subscribe to live room metadata updates
           OBR.room.onMetadataChange((updatedMetadata) => {
@@ -238,6 +339,11 @@ export default function App() {
             }
             if (updatedMetadata[METADATA_BROADCAST] !== undefined) {
               setBroadcast((updatedMetadata[METADATA_BROADCAST] as BroadcastPayload) || null);
+            }
+            if (updatedMetadata[METADATA_KEEPER_MYSTERY] !== undefined) {
+              setKeeperMystery(
+                (updatedMetadata[METADATA_KEEPER_MYSTERY] as KeeperMysteryData) || DEFAULT_KEEPER_MYSTERY
+              );
             }
           });
 
@@ -291,6 +397,12 @@ export default function App() {
       localStorage.setItem('motw_companion_broadcast', JSON.stringify(broadcast));
     } catch {}
   }, [broadcast]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('motw_companion_keeper_mystery', JSON.stringify(keeperMystery));
+    } catch {}
+  }, [keeperMystery]);
 
   // Handle Pin Toggle
   const handleTogglePin = async () => {
@@ -403,6 +515,12 @@ export default function App() {
     syncRoomMetadata(METADATA_BROADCAST, payload);
   };
 
+  // Keeper Mystery Handler (Synced with 400ms debouncing)
+  const handleUpdateKeeperMystery = (data: KeeperMysteryData) => {
+    setKeeperMystery(data);
+    syncRoomMetadata(METADATA_KEEPER_MYSTERY, data);
+  };
+
   // Quick Roll Trigger from Grimoire or Hunter sheet (Automatically executes roll with Hunter's stat)
   const handleQuickRollFromOtherTab = (stat: StatType | undefined, moveName: string) => {
     const rollData = executePbtaRoll({
@@ -494,6 +612,8 @@ export default function App() {
               activeBroadcast={broadcast}
               onUpdateBroadcast={handleUpdateBroadcast}
               onUpdateHunter={handleUpdateHunter}
+              keeperMystery={keeperMystery}
+              onUpdateKeeperMystery={handleUpdateKeeperMystery}
             />
           )}
         </main>

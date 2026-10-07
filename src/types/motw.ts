@@ -223,3 +223,33 @@ export interface BroadcastPayload {
   timestamp: number;
   active: boolean;
 }
+
+export type CountdownStage = 'Day' | 'Shadows' | 'Sunset' | 'Dusk' | 'Nightfall' | 'Midnight';
+
+export interface CountdownClock {
+  id: string;
+  title: string;
+  currentStage: number; // 0 to 6, where 0 is 'Not Started' and 1-6 map to Day through Midnight
+  stageDescriptions: Record<CountdownStage, string>;
+}
+
+export type ThreatType = 'Monster' | 'Minion' | 'Bystander' | 'Location' | 'Phenomenon' | 'Other';
+
+export interface Threat {
+  id: string;
+  name: string;
+  threatType: ThreatType;
+  motivation: string;
+  harm: number;
+  maxHarm: number;
+  isUnstable: boolean;
+  armor: number;
+  weakness: string;
+  attacks: string;
+  notes: string;
+}
+
+export interface KeeperMysteryData {
+  clocks: [CountdownClock, CountdownClock];
+  threats: Threat[];
+}

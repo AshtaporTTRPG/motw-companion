@@ -1,6 +1,32 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { HunterProfile, HunterScopedNotes, TableNotesData, KeeperNoteCard, BroadcastPayload } from '../types/motw';
-import { Eye, EyeOff, Plus, Trash2, ChevronDown, ChevronRight, Save, Clock, Lock, Shield, FileText, HelpCircle, Award, CheckSquare, Square, RotateCcw } from 'lucide-react';
+import {
+  HunterProfile,
+  HunterScopedNotes,
+  TableNotesData,
+  KeeperNoteCard,
+  BroadcastPayload,
+  KeeperMysteryData,
+} from '../types/motw';
+import {
+  Eye,
+  EyeOff,
+  Plus,
+  Trash2,
+  ChevronDown,
+  ChevronRight,
+  Save,
+  Clock,
+  Lock,
+  Shield,
+  FileText,
+  HelpCircle,
+  Award,
+  CheckSquare,
+  Square,
+  RotateCcw,
+  Skull,
+} from 'lucide-react';
+import { KeeperMysteryBoard } from './KeeperMysteryBoard';
 
 interface NotesTabProps {
   activeHunter: HunterProfile | null;
@@ -11,6 +37,8 @@ interface NotesTabProps {
   activeBroadcast: BroadcastPayload | null;
   onUpdateBroadcast: (payload: BroadcastPayload | null) => void;
   onUpdateHunter?: (hunter: HunterProfile) => void;
+  keeperMystery: KeeperMysteryData;
+  onUpdateKeeperMystery: (data: KeeperMysteryData) => void;
 }
 
 const DEFAULT_HUNTER_NOTES: HunterScopedNotes = {
@@ -29,9 +57,14 @@ export const NotesTab: React.FC<NotesTabProps> = ({
   activeBroadcast,
   onUpdateBroadcast,
   onUpdateHunter,
+  keeperMystery,
+  onUpdateKeeperMystery,
 }) => {
   // Scope selector: hunter | table | keeper
   const [activeScope, setActiveScope] = useState<'hunter' | 'table' | 'keeper'>('hunter');
+
+  // Keeper sub-view: 'mystery' (Clocks & Threat Board) | 'cards' (Secret Note Cards)
+  const [keeperSubView, setKeeperSubView] = useState<'mystery' | 'cards'>('mystery');
 
   // Hunter sub-tabs: general | gear | contacts | clues
   const [hunterSubTab, setHunterSubTab] = useState<'general' | 'gear' | 'contacts' | 'clues'>('general');
@@ -508,19 +541,43 @@ export const NotesTab: React.FC<NotesTabProps> = ({
       {/* Scope 3: Keeper Notes (GM Only) */}
       {activeScope === 'keeper' && role === 'GM' && (
         <div className="flex-1 flex flex-col min-h-0 p-2.5 space-y-2">
-          {/* Header & Add Button */}
-          <div className="flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-1.5">
-              <Shield className="w-3.5 h-3.5 text-purple-400" />
-              <span className="text-xs font-bold text-purple-300">Secret Keeper Cards</span>
+          {/* Sub-view Navigation: Mystery Clocks & Threats vs Note Cards */}
+          <div className="flex items-center justify-between gap-1 border-b border-neutral-800 pb-1.5 shrink-0">
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setKeeperSubView('mystery')}
+                className={`px-2 py-1 rounded text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer border ${
+                  keeperSubView === 'mystery'
+                    ? 'bg-amber-500 text-neutral-950 border-amber-400 shadow-xs'
+                    : 'bg-neutral-900 text-neutral-400 hover:text-neutral-200 border-neutral-800'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Mystery Clocks & Threats</span>
+              </button>
+
+              <button
+                onClick={() => setKeeperSubView('cards')}
+                className={`px-2 py-1 rounded text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer border ${
+                  keeperSubView === 'cards'
+                    ? 'bg-purple-900/80 text-purple-200 border-purple-500 shadow-xs'
+                    : 'bg-neutral-900 text-neutral-400 hover:text-neutral-200 border-neutral-800'
+                }`}
+              >
+                <Shield className="w-3.5 h-3.5" />
+                <span>Note Cards ({keeperCards.length})</span>
+              </button>
             </div>
-            <button
-              onClick={handleAddKeeperCard}
-              className="px-2 py-1 bg-purple-900/60 hover:bg-purple-800 text-purple-200 rounded text-xs font-semibold flex items-center gap-1 border border-purple-700/60 cursor-pointer transition-colors shadow-xs"
-            >
-              <Plus className="w-3 h-3" />
-              <span>New Card</span>
-            </button>
+
+            {keeperSubView === 'cards' && (
+              <button
+                onClick={handleAddKeeperCard}
+                className="px-2 py-1 bg-purple-900/60 hover:bg-purple-800 text-purple-200 rounded text-xs font-semibold flex items-center gap-1 border border-purple-700/60 cursor-pointer transition-colors shadow-xs"
+              >
+                <Plus className="w-3 h-3" />
+                <span>New Card</span>
+              </button>
+            )}
           </div>
 
           {/* Active Broadcast Indicator */}
@@ -539,108 +596,120 @@ export const NotesTab: React.FC<NotesTabProps> = ({
             </div>
           )}
 
-          {/* Cards List */}
-          <div className="flex-1 overflow-y-auto space-y-2 pr-0.5">
-            {keeperCards.length === 0 ? (
-              <div className="py-8 text-center text-xs text-neutral-500 italic">
-                No Keeper cards created yet. Click "New Card" to begin staging your mystery!
-              </div>
-            ) : (
-              keeperCards.map((card) => {
-                const isBroadcastingThis =
-                  activeBroadcast?.id === card.id && activeBroadcast.active;
-                return (
-                  <div
-                    key={card.id}
-                    className={`bg-neutral-900 border rounded-lg overflow-hidden transition-all shadow-xs ${
-                      isBroadcastingThis ? 'border-amber-500 shadow-amber-950/50' : 'border-neutral-800'
-                    }`}
-                  >
-                    {/* Card Header */}
-                    <div className="p-2 flex items-center justify-between bg-neutral-850 gap-2">
-                      <div
-                        onClick={() =>
-                          handleUpdateKeeperCard(card.id, { isExpanded: !card.isExpanded })
-                        }
-                        className="flex-1 flex items-center gap-1.5 cursor-pointer truncate"
-                      >
-                        {card.isExpanded ? (
-                          <ChevronDown className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                        ) : (
-                          <ChevronRight className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                        )}
-                        <input
-                          type="text"
-                          value={card.title}
-                          onClick={(e) => e.stopPropagation()}
-                          onChange={(e) =>
-                            handleUpdateKeeperCard(card.id, { title: e.target.value })
+          {/* Sub-view Content */}
+          {keeperSubView === 'mystery' ? (
+            <div className="flex-1 overflow-y-auto pr-0.5 min-h-0">
+              <KeeperMysteryBoard
+                data={keeperMystery}
+                onChange={onUpdateKeeperMystery}
+                onBroadcastToTableNotes={(text) => handleTableTextChange(tableText + text)}
+              />
+            </div>
+          ) : (
+            /* Cards List */
+            <div className="flex-1 overflow-y-auto space-y-2 pr-0.5 min-h-0">
+              {keeperCards.length === 0 ? (
+                <div className="py-8 text-center text-xs text-neutral-500 italic">
+                  No Keeper cards created yet. Click "New Card" to begin staging your mystery!
+                </div>
+              ) : (
+                keeperCards.map((card) => {
+                  const isBroadcastingThis =
+                    activeBroadcast?.id === card.id && activeBroadcast.active;
+                  return (
+                    <div
+                      key={card.id}
+                      className={`bg-neutral-900 border rounded-lg overflow-hidden transition-all shadow-xs ${
+                        isBroadcastingThis ? 'border-amber-500 shadow-amber-950/50' : 'border-neutral-800'
+                      }`}
+                    >
+                      {/* Card Header */}
+                      <div className="p-2 flex items-center justify-between bg-neutral-850 gap-2">
+                        <div
+                          onClick={() =>
+                            handleUpdateKeeperCard(card.id, { isExpanded: !card.isExpanded })
                           }
-                          className="bg-transparent text-xs font-bold text-neutral-200 focus:outline-none focus:border-b border-amber-500 w-full"
-                          placeholder="Note Title"
-                        />
-                      </div>
-
-                      {/* Card Action Cluster */}
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {/* "👁️ Reveal to Table" toggle */}
-                        <button
-                          onClick={() => handleToggleBroadcastCard(card)}
-                          title={
-                            isBroadcastingThis
-                              ? 'Hide from player screens'
-                              : 'Broadcast this note directly to player screens'
-                          }
-                          className={`px-2 py-0.5 rounded text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer border ${
-                            isBroadcastingThis
-                              ? 'bg-amber-500 text-neutral-950 border-amber-400 shadow-xs'
-                              : 'bg-neutral-800 text-neutral-300 border-neutral-700 hover:text-white hover:bg-neutral-700'
-                          }`}
+                          className="flex-1 flex items-center gap-1.5 cursor-pointer truncate"
                         >
-                          {isBroadcastingThis ? (
-                            <>
-                              <EyeOff className="w-3 h-3" />
-                              <span>Hide</span>
-                            </>
+                          {card.isExpanded ? (
+                            <ChevronDown className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
                           ) : (
-                            <>
-                              <Eye className="w-3 h-3" />
-                              <span>Reveal</span>
-                            </>
+                            <ChevronRight className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
                           )}
-                        </button>
+                          <input
+                            type="text"
+                            value={card.title}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) =>
+                              handleUpdateKeeperCard(card.id, { title: e.target.value })
+                            }
+                            className="bg-transparent text-xs font-bold text-neutral-200 focus:outline-none focus:border-b border-amber-500 w-full"
+                            placeholder="Note Title"
+                          />
+                        </div>
 
-                        <button
-                          onClick={() => handleDeleteKeeperCard(card.id)}
-                          className="p-1 text-neutral-400 hover:text-red-400 transition-colors cursor-pointer"
-                          title="Delete card"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {/* Card Action Cluster */}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {/* "👁️ Reveal to Table" toggle */}
+                          <button
+                            onClick={() => handleToggleBroadcastCard(card)}
+                            title={
+                              isBroadcastingThis
+                                ? 'Hide from player screens'
+                                : 'Broadcast this note directly to player screens'
+                            }
+                            className={`px-2 py-0.5 rounded text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer border ${
+                              isBroadcastingThis
+                                ? 'bg-amber-500 text-neutral-950 border-amber-400 shadow-xs'
+                                : 'bg-neutral-800 text-neutral-300 border-neutral-700 hover:text-white hover:bg-neutral-700'
+                            }`}
+                          >
+                            {isBroadcastingThis ? (
+                              <>
+                                <EyeOff className="w-3 h-3" />
+                                <span>Hide</span>
+                              </>
+                            ) : (
+                              <>
+                                <Eye className="w-3 h-3" />
+                                <span>Reveal</span>
+                              </>
+                            )}
+                          </button>
+
+                          <button
+                            onClick={() => handleDeleteKeeperCard(card.id)}
+                            className="p-1 text-neutral-400 hover:text-red-400 transition-colors cursor-pointer"
+                            title="Delete card"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </div>
+
+                      {/* Card Body */}
+                      {card.isExpanded && (
+                        <div className="p-2 border-t border-neutral-800/80 bg-neutral-950/40 space-y-1.5">
+                          <textarea
+                            value={card.content}
+                            onChange={(e) =>
+                              handleUpdateKeeperCard(card.id, { content: e.target.value })
+                            }
+                            rows={4}
+                            placeholder="Note content, countdown stages, monster stats, clues to reveal..."
+                            className="w-full bg-transparent text-xs text-neutral-200 placeholder-neutral-500 resize-y focus:outline-none leading-relaxed font-sans"
+                          />
+                        </div>
+                      )}
                     </div>
-
-                    {/* Card Body */}
-                    {card.isExpanded && (
-                      <div className="p-2 border-t border-neutral-800/80 bg-neutral-950/40 space-y-1.5">
-                        <textarea
-                          value={card.content}
-                          onChange={(e) =>
-                            handleUpdateKeeperCard(card.id, { content: e.target.value })
-                          }
-                          rows={4}
-                          placeholder="Note content, countdown stages, monster stats, clues to reveal..."
-                          className="w-full bg-transparent text-xs text-neutral-200 placeholder-neutral-500 resize-y focus:outline-none leading-relaxed font-sans"
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
+                  );
+                })
+              )}
+            </div>
+          )}
         </div>
       )}
+
     </div>
   );
 };
