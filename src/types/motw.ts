@@ -122,6 +122,7 @@ export interface HunterProfile {
   stats: HunterStats;
   selectedMoves: string[];
   gear: string;
+  selectedGear?: string[];
   luckSpecial: string;
   improvementsTaken: string[];
   levelUpCount?: number;
@@ -163,6 +164,13 @@ export interface PlaybookSubMechanic {
   track?: string[];
 }
 
+export interface PlaybookGearCategory {
+  name: string;
+  min?: number;
+  max: number;
+  options: string[];
+}
+
 export interface PlaybookDefinition {
   id: string;
   name: string;
@@ -172,7 +180,9 @@ export interface PlaybookDefinition {
   statOptions: HunterStats[];
   moves: PlaybookMove[];
   improvements: string[];
+  advancedImprovements?: string[];
   gearChoices: string[];
+  gearCategories?: PlaybookGearCategory[];
   subMechanics?: PlaybookSubMechanic;
 }
 

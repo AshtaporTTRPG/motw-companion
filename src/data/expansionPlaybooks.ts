@@ -1,5 +1,15 @@
 import { PlaybookDefinition } from '../types/motw';
 
+export const UNIVERSAL_ADVANCED_IMPROVEMENTS: string[] = [
+  'Get +1 to any rating, max +3',
+  'Change this hunter to a new playbook',
+  'Create a second hunter to play in addition to this one',
+  'Mark two of the basic moves as advanced',
+  'Mark another two of the basic moves as advanced',
+  'Retire this hunter to safety',
+  'Erase one used Luck mark from your playbook',
+];
+
 export const EXPANSION_PLAYBOOKS: PlaybookDefinition[] = [
   {
     id: 'the-action-scientist',
@@ -61,10 +71,15 @@ export const EXPANSION_PLAYBOOKS: PlaybookDefinition[] = [
       'Get +1 Sharp (max +3)',
       'Get +1 Tough (max +2)',
       'Get +1 Cool (max +2)',
+      'Get +1 Weird (max +2)',
       'Take another Action Scientist move',
       'Take another Action Scientist move',
       'Take a move from another playbook',
       'Add a new Area of Study or mobile laboratory facility',
+    ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
+      'New interest: add a second area of study',
     ],
     gearChoices: [
       'Science Weapon: Lightning gun (2-harm close stun loud messy)',
@@ -149,6 +164,11 @@ export const EXPANSION_PLAYBOOKS: PlaybookDefinition[] = [
       'Take a move from another playbook',
       'Hire an elite personal bodyguard or loyal PR assistant',
     ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
+      'Retire this hunter to increased fame',
+      'Your fame skyrockets, bringing new benefits and obligations',
+    ],
     gearChoices: [
       '.38 revolver (2-harm close reload)',
       'Shotgun (3-harm close reload messy)',
@@ -227,6 +247,12 @@ export const EXPANSION_PLAYBOOKS: PlaybookDefinition[] = [
       'Take a move from another playbook',
       'Gain access to a personal Faerie Hollow or crossroad portal',
     ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
+      'Remove one Unknown Heritage tag',
+      'Retire to a position of supernatural responsibility',
+      'You find a home (Human group / Supernatural heritage / Supernatural realm)',
+    ],
     gearChoices: [
       'Cold iron athame (2-harm hand magic)',
       'Thorn-carved longbow (2-harm close/far silent)',
@@ -298,6 +324,11 @@ export const EXPANSION_PLAYBOOKS: PlaybookDefinition[] = [
       'Take a move from another playbook',
       'Expand your Covenant with a new specialist ally or safehouse',
     ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
+      'Your Covenant now works twice per session',
+      'Create a hunter based on one of your allies',
+    ],
     gearChoices: [
       'Encrypted walkie-talkies and emergency flare gun (2-harm close fire loud)',
       'Heavy baton or crowbar (2-harm hand stun)',
@@ -365,12 +396,16 @@ export const EXPANSION_PLAYBOOKS: PlaybookDefinition[] = [
       },
     ],
     improvements: [
-      'Get +1 Sharp (max +3)',
-      'Get +1 Cool (max +2)',
-      'Get +1 Charm (max +2)',
+      'Get +1 Cool (max +3)',
+      'Get +1 Tough (max +2)',
+      'Get +1 Sharp (max +2)',
       'Take another Crooked move',
       'Take another Crooked move',
       'Take a move from another playbook',
+      'Erase one of your Heat sources or pay off an underworld marker',
+    ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
       'Erase one of your Heat sources or pay off an underworld marker',
     ],
     gearChoices: [
@@ -453,13 +488,18 @@ export const EXPANSION_PLAYBOOKS: PlaybookDefinition[] = [
       },
     ],
     improvements: [
-      'Get +1 Weird (max +3)',
+      'Get +1 Tough (max +3)',
+      'Get +1 Weird (max +2)',
       'Get +1 Cool (max +2)',
-      'Get +1 Sharp (max +2)',
       'Take another Curse-Eater move',
       'Take another Curse-Eater move',
       'Take a move from another playbook',
       'Expand your maximum Corruption capacity or unlock a sanctified purge ritual',
+    ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
+      'Make a consumed magic into a permanent custom move',
+      'Clear all corruption without clearing consumed magics',
     ],
     gearChoices: [
       'Enchanted silver dagger (2-harm hand magic)',
@@ -526,12 +566,16 @@ export const EXPANSION_PLAYBOOKS: PlaybookDefinition[] = [
     ],
     improvements: [
       'Get +1 Tough (max +3)',
-      'Get +1 Cool (max +2)',
       'Get +1 Weird (max +2)',
+      'Get +1 Cool (max +2)',
       'Take another Divine move',
       'Take another Divine move',
       'Take a move from another playbook',
       'Unlock higher rank in the Celestial Hierarchy or summon angelic reinforcements',
+    ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
+      'Change your mission',
     ],
     gearChoices: [
       'Flaming sword (3-harm hand fire holy)',
@@ -598,13 +642,18 @@ export const EXPANSION_PLAYBOOKS: PlaybookDefinition[] = [
       },
     ],
     improvements: [
-      'Get +1 Cool (max +3)',
+      'Get +1 Charm (max +3)',
+      'Get +1 Cool (max +2)',
       'Get +1 Sharp (max +2)',
-      'Get +1 Weird (max +2)',
       'Take another Envoy move',
       'Take another Envoy move',
       'Take a move from another playbook',
       'Establish an embassy or sanctuary protected by cosmic law',
+    ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
+      'Pick a secondary Task',
+      'Change any or all Overseers\' Values and Concerns',
     ],
     gearChoices: [
       'Overseer communication chronometer / resonance stone',
@@ -670,13 +719,19 @@ export const EXPANSION_PLAYBOOKS: PlaybookDefinition[] = [
       },
     ],
     improvements: [
-      'Get +1 Charm (max +3)',
-      'Get +1 Weird (max +2)',
+      'Get +1 Tough (max +3)',
       'Get +1 Cool (max +2)',
+      'Get +1 Sharp (max +2)',
       'Take another Forged move',
       'Take another Forged move',
       'Take a move from another playbook',
       'Forge a secondary weapon form or enhance your weapon damage',
+    ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
+      'Wield yourself in weapon form',
+      'Allies treat an advanced move as advanced',
+      'Choose to be human or weapon permanently',
     ],
     gearChoices: [
       'Living Weapon Form: Blade (3-harm hand messy)',
@@ -754,11 +809,15 @@ export const EXPANSION_PLAYBOOKS: PlaybookDefinition[] = [
     ],
     improvements: [
       'Get +1 Sharp (max +3)',
-      'Get +1 Charm (max +2)',
       'Get +1 Cool (max +2)',
+      'Get +1 Tough (max +2)',
       'Take another Gumshoe move',
       'Take another Gumshoe move',
       'Take a move from another playbook',
+      'Add 2 new contacts to The Naked City network',
+    ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
       'Add 2 new contacts to The Naked City network',
     ],
     gearChoices: [

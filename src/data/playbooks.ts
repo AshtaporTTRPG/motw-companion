@@ -1,5 +1,5 @@
 import { PlaybookDefinition } from '../types/motw';
-import { EXPANSION_PLAYBOOKS } from './expansionPlaybooks';
+import { EXPANSION_PLAYBOOKS, UNIVERSAL_ADVANCED_IMPROVEMENTS } from './expansionPlaybooks';
 
 export const PLAYBOOKS: PlaybookDefinition[] = [
   {
@@ -68,6 +68,10 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
       'Take a move from another playbook',
       'Gain an ally or haven',
     ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
+      'Delete one Doom tag and optionally one Heroic tag',
+    ],
     gearChoices: [
       'Destined Weapon: Ancient relic blade (3-harm hand messy heavy)',
       'Destined Weapon: Blessed silver hammer (3-harm hand heavy holy)',
@@ -131,12 +135,18 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
     ],
     improvements: [
       'Get +1 Sharp (max +3)',
-      'Get +1 Charm (max +2)',
-      'Get +1 Cool (max +2)',
-      'Expand your Haven with 2 new upgrades',
+      'Get +1 Tough (max +2)',
+      'Get +1 Weird (max +2)',
+      'Take another Expert move',
       'Take another Expert move',
       'Take a move from another playbook',
-      'Gain an apprentice or assistant',
+      'Add an option to your haven',
+      'Add another option to your haven',
+    ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
+      'Add another option to your haven',
+      'Add a third option to your haven',
     ],
     gearChoices: [
       'Shotgun (3-harm close reload messy)',
@@ -234,6 +244,11 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
       'Take a move from another playbook',
       'Gain a pack or coven of followers',
     ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
+      'Free yourself from the curse of your kind (lose 1 Weird)',
+      'You turn evil (retire as a Keeper threat)',
+    ],
     gearChoices: [
       'Natural weapons (Fangs / Talons: 2-harm hand intimate messy)',
       'Heavy trench coat (conceals monstrous features)',
@@ -306,10 +321,15 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
       'Get +1 Cool (max +3)',
       'Get +1 Tough (max +2)',
       'Get +1 Sharp (max +2)',
-      'Add a new resource or division to your Agency',
+      'Take another Professional move',
       'Take another Professional move',
       'Take a move from another playbook',
-      'Gain commanding officer authority',
+      'Add a new Resource to your agency',
+      'Take another Agency move',
+    ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
+      'Get other hunters hired by your agency',
     ],
     gearChoices: [
       'Assault rifle (3-harm close/far burst loud)',
@@ -368,6 +388,12 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
         stat: 'weird',
       },
       {
+        id: 'spooky-the-big-whammy',
+        name: 'The Big Whammy',
+        description: 'You can use your powers to kick some ass: roll +Weird instead of +Tough. The attack has 2-harm close magic obvious.',
+        stat: 'weird',
+      },
+      {
         id: 'spooky-darker-sort-of-hunter',
         name: 'The Darker Sort of Hunter',
         description: 'Whenever you use magic or a Spooky move, you may choose to invoke your Dark Side. If you do, gain +1 to the roll, but the Keeper will give you a dark urge or temptation that you must satisfy.',
@@ -378,7 +404,13 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
       'Get +1 Charm (max +2)',
       'Get +1 Sharp (max +2)',
       'Take another Spooky move',
+      'Take another Spooky move',
       'Take a move from another playbook',
+      'Purify or renegotiate your dark pact',
+      'Gain an arcane familiar',
+    ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
       'Purify or renegotiate your dark pact',
       'Gain an arcane familiar',
     ],
@@ -445,9 +477,15 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
       'Get +1 Cool (max +2)',
       'Get +1 Sharp (max +2)',
       'Take another Wronged move',
+      'Take another Wronged move',
       'Take a move from another playbook',
       'Find a fellow survivor ally',
       'Gain a heavily fortified muscle car or war van',
+    ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
+      'Track down the specific monster responsible for your loss',
+      'Change the target of your vengeful rage',
     ],
     gearChoices: [
       'Sawed-off double-barrel shotgun (3-harm close messy reload)',
@@ -515,7 +553,13 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
       'Get +1 Cool (max +2)',
       'Get +1 Charm (max +2)',
       'Take another Flake move',
+      'Take another Flake move',
       'Take a move from another playbook',
+      'Gain a network of underground informants',
+      'Build a mobile signal interceptor rig',
+    ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
       'Gain a network of underground informants',
       'Build a mobile signal interceptor rig',
     ],
@@ -586,7 +630,13 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
       'Get +1 Cool (max +2)',
       'Get +1 Tough (max +2)',
       'Take another Mundane move',
+      'Take another Mundane move',
       'Take a move from another playbook',
+      'Get a trusty beat-up station wagon or truck',
+      'Become the anchor keeping the team human',
+    ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
       'Get a trusty beat-up station wagon or truck',
       'Become the anchor keeping the team human',
     ],
@@ -673,12 +723,17 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
     ],
     improvements: [
       'Get +1 Weird (max +3)',
-      'Get +1 Charm (max +2)',
+      'Get +1 Cool (max +2)',
       'Get +1 Sharp (max +2)',
       'Take another Hex move',
       'Take another Hex move',
       'Take a move from another playbook',
       'Add an additional Rote to your grimoire',
+    ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
+      'Gain another two Rotes',
+      'Choose one advanced Hex move: Apotheosis or Synthesis',
     ],
     gearChoices: [
       '.38 revolver (2-harm close reload)',
@@ -760,13 +815,18 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
       },
     ],
     improvements: [
-      'Get +1 Weird (max +3)',
-      'Get +1 Tough (max +2)',
+      'Get +1 Tough (max +3)',
       'Get +1 Cool (max +2)',
+      'Get +1 Weird (max +2)',
       'Take another Host move',
       'Take another Host move',
       'Take a move from another playbook',
       'Gain an additional Symbiosis Benefit',
+    ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
+      'Create a second hunter by symbiotic fission',
+      'Take another benefit from Symbiosis',
     ],
     gearChoices: [
       'Personal weapon: Concealed switchblade (1-harm hand intimate)',
@@ -858,13 +918,17 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
       },
     ],
     improvements: [
-      'Get +1 Weird (max +3)',
-      'Get +1 Tough (max +2)',
+      'Get +1 Tough (max +3)',
       'Get +1 Cool (max +2)',
+      'Get +1 Sharp (max +2)',
       'Take another Initiate move',
       'Take another Initiate move',
       'Take a move from another playbook',
       'Gain promotion within your Sect hierarchy',
+    ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
+      'Become the leader of the whole Sect',
     ],
     gearChoices: [
       'Old-fashioned armour: Chainmail tunic or ringmail hauberk (1-armour heavy)',
@@ -951,6 +1015,10 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
       'Take another Interface move',
       'Take another Interface move',
       'Take a move from another playbook',
+      'Add an additional cybernetic Upgrade',
+    ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
       'Add an additional cybernetic Upgrade',
     ],
     gearChoices: [
@@ -1040,6 +1108,13 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
       'Take another Pararomantic move',
       'Take a move from another playbook',
       'Deepen your bond with your Supernatural Guide',
+    ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
+      'Take a second gift',
+      'Change your Guide',
+      'Gain a second Guide',
+      'Erase all marks from Relationship Status track',
     ],
     gearChoices: [
       'Normal gear: Practical clothes, smartphone, first aid pouch, pocketknife (1-harm hand)',
@@ -1134,6 +1209,10 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
       'Take a move from another playbook',
       'Find irrefutable physical proof of your First Encounter',
     ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
+      'Resolve your first encounter (Keeper makes next mystery about it)',
+    ],
     gearChoices: [
       'Laptop with encrypted research files & high-gain field recorder',
       'Investigation tool: EMF meter & thermal imaging camera',
@@ -1218,6 +1297,10 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
       'Take another Snoop move',
       'Take a move from another playbook',
       'Gain high-tier national syndicated broadcasting clearance',
+    ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
+      'Make it big: You\'re a superstar now!',
     ],
     gearChoices: [
       'Recording device: 4K shoulder cinema camcorder',
@@ -1331,6 +1414,11 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
       'Take a move from another playbook',
       'Gain mastery of an ancient elemental grimoire',
     ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
+      'Gain mastery of an ancient elemental grimoire',
+      'Take another Combat Magic base and effect',
+    ],
     gearChoices: [
       'Backup weapon: Old revolver (.38 special: 2-harm close reload)',
       'Backup weapon: Ritual knife (2-harm hand magic)',
@@ -1408,6 +1496,10 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
       'Take another Spooktacular move',
       'Take another Spooktacular move',
       'Take a move from another playbook',
+      'Gain your own traveling sideshow troupe or mobile carnival truck',
+    ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
       'Gain your own traveling sideshow troupe or mobile carnival truck',
     ],
     gearChoices: [
@@ -1497,6 +1589,12 @@ export const PLAYBOOKS: PlaybookDefinition[] = [
       'Take another Visitor move',
       'Take a move from another playbook',
       'Repair or recover a working piece of your spacecraft',
+    ],
+    advancedImprovements: [
+      ...UNIVERSAL_ADVANCED_IMPROVEMENTS,
+      'Retire to safety on Earth',
+      'Retire to safety on homeworld',
+      'Establish official contact between Earth and your people',
     ],
     gearChoices: [
       'Broken vessel: Crashed scout pod hidden in the woods or cloaked escape capsule',

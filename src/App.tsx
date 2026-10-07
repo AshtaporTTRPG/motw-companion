@@ -70,6 +70,7 @@ export default function App() {
 
   // Pre-selected move to roll when jumping from Grimoire / Hunter tab to Dice tray
   const [selectedMoveForRoll, setSelectedMoveForRoll] = useState<string | null>(null);
+  const [selectedMoveStatForRoll, setSelectedMoveStatForRoll] = useState<StatType | null>(null);
 
   // Hunters List (Synced to room metadata)
   const [allHunters, setAllHunters] = useState<HunterProfile[]>(() => {
@@ -354,6 +355,8 @@ export default function App() {
 
   // Roll Feed Handlers
   const handleAddRoll = (roll: RollResult) => {
+    // Strictly prevent self rolls from being broadcasted to room metadata
+    if (roll.scope === 'self') return;
     // Keep latest 50 rolls to avoid bloated metadata
     const nextFeed = [roll, ...rollFeed].slice(0, 50);
     setRollFeed(nextFeed);
@@ -413,6 +416,7 @@ export default function App() {
 
     handleAddRoll(rollData);
     setSelectedMoveForRoll(moveName);
+    setSelectedMoveStatForRoll(stat || null);
     setActiveTab('dice');
   };
 
@@ -464,7 +468,11 @@ export default function App() {
               onMarkExperience={handleMarkExperience}
               onSpendLuck={handleSpendLuckFromDice}
               selectedMoveName={selectedMoveForRoll}
-              onClearSelectedMove={() => setSelectedMoveForRoll(null)}
+              onClearSelectedMove={() => {
+                setSelectedMoveForRoll(null);
+                setSelectedMoveStatForRoll(null);
+              }}
+              selectedMoveStat={selectedMoveStatForRoll}
             />
           )}
 

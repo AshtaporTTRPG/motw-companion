@@ -20,6 +20,7 @@ interface DiceTrayProps {
   onSpendLuck?: () => void;
   selectedMoveName?: string | null;
   onClearSelectedMove?: () => void;
+  selectedMoveStat?: StatType | null;
 }
 
 export const DiceTray: React.FC<DiceTrayProps> = ({
@@ -34,31 +35,60 @@ export const DiceTray: React.FC<DiceTrayProps> = ({
   onSpendLuck,
   selectedMoveName,
   onClearSelectedMove,
+  selectedMoveStat,
 }) => {
   const [selectedStat, setSelectedStat] = useState<StatType | 'none'>('sharp');
   const [modifier, setModifier] = useState<number>(0); // Range -3 to +3
   const [forwardMod, setForwardMod] = useState<number>(0);
   const [scope, setScope] = useState<RollScope>('public');
-  const [latestRoll, setLatestRoll] = useState<RollResult | null>(() => rollFeed[0] || null);
   const [isRolling, setIsRolling] = useState(false);
   const [expandedOutcomeIds, setExpandedOutcomeIds] = useState<Record<string, boolean>>({});
 
-  // Keep latestRoll in sync if rollFeed has newer top item
-  useEffect(() => {
-    if (rollFeed.length > 0 && (!latestRoll || latestRoll.id !== rollFeed[0].id)) {
-      setLatestRoll(rollFeed[0]);
-    }
-  }, [rollFeed]);
+  // 1. Self Rolls: Stored strictly in local client state and sessionStorage
+  const [selfRolls, setSelfRolls] = useState<RollResult[]>(() => {
+    try {
+      const saved = sessionStorage.getItem('motw_companion_self_rolls');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [];
+  });
 
-  // If a move was selected from sheet or grimoire, pre-select its stat if possible
+  const saveSelfRoll = (roll: RollResult) => {
+    setSelfRolls((prev) => {
+      const updated = [roll, ...prev.filter((r) => r.id !== roll.id)].slice(0, 50);
+      try {
+        sessionStorage.setItem('motw_companion_self_rolls', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  // Merged feed for local rendering: Public/Keeper rolls from room metadata + local Self rolls by current user
+  const displayFeed = [
+    ...rollFeed.filter((r) => r.scope !== 'self'),
+    ...selfRolls.filter((r) => r.rollerId === currentUserId && r.scope === 'self'),
+  ].sort((a, b) => b.timestamp - a.timestamp);
+
+  const [latestRoll, setLatestRoll] = useState<RollResult | null>(() => displayFeed[0] || null);
+
+  // Keep latestRoll in sync if displayFeed has newer top item
   useEffect(() => {
-    if (selectedMoveName) {
-      const details = findMoveDetails(selectedMoveName);
+    if (displayFeed.length > 0 && (!latestRoll || latestRoll.id !== displayFeed[0].id)) {
+      setLatestRoll(displayFeed[0]);
+    }
+  }, [displayFeed]);
+
+  // If a move was selected from sheet or grimoire, pre-select its calculated stat if passed, or detect it
+  useEffect(() => {
+    if (selectedMoveStat) {
+      setSelectedStat(selectedMoveStat);
+    } else if (selectedMoveName) {
+      const details = findMoveDetails(selectedMoveName, activeHunter);
       if (details?.stat) {
         setSelectedStat(details.stat);
       }
     }
-  }, [selectedMoveName]);
+  }, [selectedMoveName, selectedMoveStat, activeHunter]);
 
   // Calculate stat value
   const statVal =
@@ -90,7 +120,12 @@ export const DiceTray: React.FC<DiceTrayProps> = ({
 
     setTimeout(() => {
       setLatestRoll(rollData);
-      onAddRoll(rollData);
+      // Privacy handling: Self rolls strictly saved to local state/sessionStorage, NOT room metadata
+      if (scope === 'self') {
+        saveSelfRoll(rollData);
+      } else {
+        onAddRoll(rollData);
+      }
       setIsRolling(false);
       if (forwardMod !== 0) {
         setForwardMod(0);
@@ -101,7 +136,7 @@ export const DiceTray: React.FC<DiceTrayProps> = ({
   // Convert roll directly to 12 via Luck
   const handleTurnTo12WithLuck = () => {
     if (!latestRoll || !activeHunter) return;
-    const details = findMoveDetails(latestRoll.moveName);
+    const details = findMoveDetails(latestRoll.moveName, activeHunter);
     const updatedOutcome = getOutcomeTextForMove('advanced', details);
 
     const updatedRoll: RollResult = {
@@ -115,8 +150,20 @@ export const DiceTray: React.FC<DiceTrayProps> = ({
         : `${latestRoll.moveName} (Luck Spent)`,
     };
     setLatestRoll(updatedRoll);
-    onAddRoll(updatedRoll);
+    if (updatedRoll.scope === 'self') {
+      saveSelfRoll(updatedRoll);
+    } else {
+      onAddRoll(updatedRoll);
+    }
     if (onSpendLuck) onSpendLuck();
+  };
+
+  const handleClearAllFeed = () => {
+    setSelfRolls([]);
+    try {
+      sessionStorage.removeItem('motw_companion_self_rolls');
+    } catch {}
+    onClearFeed();
   };
 
   const toggleFeedOutcome = (id: string) => {
@@ -297,99 +344,132 @@ export const DiceTray: React.FC<DiceTrayProps> = ({
 
       {/* 4. Latest Roll Display: Compact Outcome Card */}
       {latestRoll && (
-        <div className="p-2.5 rounded-lg border border-neutral-800 bg-neutral-900/90 flex flex-col gap-1.5 shrink-0 shadow-md">
-          {/* Header: [Move Name or Stat Roll]  [Dice 1] + [Dice 2] + [Mod] = [Total] */}
-          <div className="flex items-center justify-between gap-2 text-xs">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="font-bold text-neutral-200 truncate">
-                {latestRoll.moveName}
-              </span>
-              {latestRoll.scope === 'keeper' && (
-                <span className="text-[9px] px-1 py-0.2 rounded bg-purple-950 text-purple-300 border border-purple-700 shrink-0">
-                  🔒 Keeper
+        (() => {
+          // 1. Self Rolls: ONLY visible on the screen of the hunter who made the roll
+          if (latestRoll.scope === 'self' && latestRoll.rollerId !== currentUserId) {
+            return null;
+          }
+
+          // 2. Keeper Rolls: If role !== 'GM' AND roll.rollerId !== currentUserId -> render masked card
+          const isLatestRollMasked =
+            latestRoll.scope === 'keeper' &&
+            role !== 'GM' &&
+            latestRoll.rollerId !== currentUserId;
+
+          if (isLatestRollMasked) {
+            return (
+              <div className="p-2.5 rounded-lg border border-purple-900 bg-neutral-900/90 flex items-center justify-between text-xs text-purple-200 italic shadow-md shrink-0">
+                <span className="font-semibold text-purple-300">
+                  {latestRoll.rollerName} rolled secretly to the Keeper 🔒
                 </span>
-              )}
-            </div>
-            <div className="flex items-center gap-1 font-mono shrink-0 text-xs">
-              <span className="w-5 h-5 rounded bg-neutral-950 border border-neutral-700 flex items-center justify-center font-bold text-amber-300">
-                {latestRoll.d1}
-              </span>
-              <span className="text-neutral-500">+</span>
-              <span className="w-5 h-5 rounded bg-neutral-950 border border-neutral-700 flex items-center justify-center font-bold text-amber-300">
-                {latestRoll.d2}
-              </span>
-              {latestRoll.modifier !== 0 && (
-                <>
-                  <span className="text-neutral-500">+</span>
-                  <span className="text-neutral-300 font-semibold">
-                    {latestRoll.modifier >= 0 ? `+${latestRoll.modifier}` : latestRoll.modifier}
-                  </span>
-                </>
-              )}
-              {latestRoll.forwardOngoingMod !== 0 && (
-                <>
-                  <span className="text-neutral-500">+</span>
-                  <span className="text-neutral-400">
-                    {latestRoll.forwardOngoingMod >= 0 ? `+${latestRoll.forwardOngoingMod}` : latestRoll.forwardOngoingMod}
-                  </span>
-                </>
-              )}
-              <span className="text-neutral-500">=</span>
-              <span className="font-extrabold text-white px-1.5 py-0.5 rounded bg-neutral-800 border border-neutral-700">
-                {latestRoll.total}
-              </span>
-            </div>
-          </div>
+                <span className="text-[10px] text-purple-400 font-mono">
+                  {new Date(latestRoll.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            );
+          }
 
-          {/* Outcome Badge & Rule Text */}
-          <div className="flex items-start gap-2 pt-0.5">
-            <span
-              className={`shrink-0 px-2 py-0.5 rounded text-[11px] font-bold border ${
-                latestRoll.tier === 'miss'
-                  ? 'bg-red-950/80 text-red-300 border-red-700/60'
-                  : latestRoll.tier === 'weak'
-                  ? 'bg-yellow-950/80 text-yellow-300 border-yellow-700/60'
-                  : latestRoll.tier === 'strong'
-                  ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60'
-                  : 'bg-amber-950/80 text-amber-300 border-amber-600/60'
-              }`}
-            >
-              {latestRoll.tier === 'miss'
-                ? 'Miss <=6'
-                : latestRoll.tier === 'weak'
-                ? 'Weak Hit 7-9'
-                : latestRoll.tier === 'strong'
-                ? 'Strong Hit 10-11'
-                : 'Advanced Hit 12+'}
-            </span>
-            <div className="flex-1 text-[11px] leading-snug text-neutral-300">
-              {latestRoll.outcomeText || 'Outcome resolved according to narrative rules.'}
-            </div>
-          </div>
+          return (
+            <div className="p-2.5 rounded-lg border border-neutral-800 bg-neutral-900/90 flex flex-col gap-1.5 shrink-0 shadow-md">
+              {/* Header: [Move Name or Stat Roll]  [Dice 1] + [Dice 2] + [Mod] = [Total] */}
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="font-bold text-neutral-200 truncate">
+                    {latestRoll.moveName}
+                  </span>
+                  {latestRoll.scope === 'keeper' && (
+                    <span className="text-[9px] px-1 py-0.2 rounded bg-purple-950 text-purple-300 border border-purple-700 shrink-0">
+                      🔒 Keeper
+                    </span>
+                  )}
+                  {latestRoll.scope === 'self' && (
+                    <span className="text-[9px] px-1 py-0.2 rounded bg-neutral-800 text-neutral-300 border border-neutral-700 shrink-0">
+                      👤 Self
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 font-mono shrink-0 text-xs">
+                  <span className="w-5 h-5 rounded bg-neutral-950 border border-neutral-700 flex items-center justify-center font-bold text-amber-300">
+                    {latestRoll.d1}
+                  </span>
+                  <span className="text-neutral-500">+</span>
+                  <span className="w-5 h-5 rounded bg-neutral-950 border border-neutral-700 flex items-center justify-center font-bold text-amber-300">
+                    {latestRoll.d2}
+                  </span>
+                  {latestRoll.modifier !== 0 && (
+                    <>
+                      <span className="text-neutral-500">+</span>
+                      <span className="text-neutral-300 font-semibold">
+                        {latestRoll.modifier >= 0 ? `+${latestRoll.modifier}` : latestRoll.modifier}
+                      </span>
+                    </>
+                  )}
+                  {latestRoll.forwardOngoingMod !== 0 && (
+                    <>
+                      <span className="text-neutral-500">+</span>
+                      <span className="text-neutral-400">
+                        {latestRoll.forwardOngoingMod >= 0 ? `+${latestRoll.forwardOngoingMod}` : latestRoll.forwardOngoingMod}
+                      </span>
+                    </>
+                  )}
+                  <span className="text-neutral-500">=</span>
+                  <span className="font-extrabold text-white px-1.5 py-0.5 rounded bg-neutral-800 border border-neutral-700">
+                    {latestRoll.total}
+                  </span>
+                </div>
+              </div>
 
-          {/* Contextual actions: XP on Miss, Luck conversion */}
-          {(latestRoll.tier === 'miss' || latestRoll.tier === 'weak') && activeHunter && (
-            <div className="flex items-center justify-between pt-1 border-t border-neutral-800 text-[11px]">
-              {latestRoll.tier === 'miss' ? (
-                <button
-                  onClick={onMarkExperience}
-                  className="px-2 py-0.5 bg-red-600/30 hover:bg-red-600 text-red-200 hover:text-white rounded border border-red-500/50 font-semibold cursor-pointer flex items-center gap-1"
+              {/* Outcome Badge & Rule Text */}
+              <div className="flex items-start gap-2 pt-0.5">
+                <span
+                  className={`shrink-0 px-2 py-0.5 rounded text-[11px] font-bold border ${
+                    latestRoll.tier === 'miss'
+                      ? 'bg-red-950/80 text-red-300 border-red-700/60'
+                      : latestRoll.tier === 'weak'
+                      ? 'bg-yellow-950/80 text-yellow-300 border-yellow-700/60'
+                      : latestRoll.tier === 'strong'
+                      ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60'
+                      : 'bg-amber-950/80 text-amber-300 border-amber-600/60'
+                  }`}
                 >
-                  <Sparkles className="w-3 h-3" />
-                  <span>Mark +1 XP</span>
-                </button>
-              ) : (
-                <span className="text-neutral-500 text-[10px]">Mixed result</span>
+                  {latestRoll.tier === 'miss'
+                    ? 'Miss <=6'
+                    : latestRoll.tier === 'weak'
+                    ? 'Weak Hit 7-9'
+                    : latestRoll.tier === 'strong'
+                    ? 'Strong Hit 10-11'
+                    : 'Advanced Hit 12+'}
+                </span>
+                <div className="flex-1 text-[11px] leading-snug text-neutral-300">
+                  {latestRoll.outcomeText || 'Outcome resolved according to narrative rules.'}
+                </div>
+              </div>
+
+              {/* Contextual actions: XP on Miss, Luck conversion */}
+              {(latestRoll.tier === 'miss' || latestRoll.tier === 'weak') && activeHunter && (
+                <div className="flex items-center justify-between pt-1 border-t border-neutral-800 text-[11px]">
+                  {latestRoll.tier === 'miss' ? (
+                    <button
+                      onClick={onMarkExperience}
+                      className="px-2 py-0.5 bg-red-600/30 hover:bg-red-600 text-red-200 hover:text-white rounded border border-red-500/50 font-semibold cursor-pointer flex items-center gap-1"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>Mark +1 XP</span>
+                    </button>
+                  ) : (
+                    <span className="text-neutral-500 text-[10px]">Mixed result</span>
+                  )}
+                  <button
+                    onClick={handleTurnTo12WithLuck}
+                    className="text-amber-300 hover:text-amber-200 underline cursor-pointer text-[10px]"
+                  >
+                    Spend 1 Luck (Turn to 12)
+                  </button>
+                </div>
               )}
-              <button
-                onClick={handleTurnTo12WithLuck}
-                className="text-amber-300 hover:text-amber-200 underline cursor-pointer text-[10px]"
-              >
-                Spend 1 Luck (Turn to 12)
-              </button>
             </div>
-          )}
-        </div>
+          );
+        })()
       )}
 
       {/* 5. Expanded Roll Feed Container (flex-1 min-h-[220px] overflow-y-auto) */}
@@ -398,12 +478,12 @@ export const DiceTray: React.FC<DiceTrayProps> = ({
           <div className="flex items-center gap-1.5">
             <span className="text-xs font-bold text-neutral-300">Room Roll Feed</span>
             <span className="text-[10px] px-1.5 rounded-full bg-neutral-800 text-neutral-400 font-mono">
-              {rollFeed.length}
+              {displayFeed.length}
             </span>
           </div>
-          {rollFeed.length > 0 && (
+          {displayFeed.length > 0 && (
             <button
-              onClick={onClearFeed}
+              onClick={handleClearAllFeed}
               className="text-[10px] text-neutral-400 hover:text-red-400 flex items-center gap-1 cursor-pointer"
               title="Clear Feed"
             >
@@ -415,20 +495,23 @@ export const DiceTray: React.FC<DiceTrayProps> = ({
 
         {/* Scrollable feed list */}
         <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5 mt-1.5">
-          {rollFeed.length === 0 ? (
+          {displayFeed.length === 0 ? (
             <div className="py-6 text-center text-xs text-neutral-500 italic">
               No rolls recorded yet this session. Click any move roll button!
             </div>
           ) : (
-            rollFeed.map((roll) => {
-              // Mask keeper rolls for non-Keeper and non-roller
-              const isMaskedForUser =
-                roll.scope === 'keeper' && role !== 'GM' && roll.rollerId !== currentUserId;
-
-              // Hide self rolls from other players
+            displayFeed.map((roll) => {
+              // 1. Self Rolls: ONLY visible on the screen of the hunter who made the roll
               if (roll.scope === 'self' && roll.rollerId !== currentUserId) {
                 return null;
               }
+
+              // 2. Keeper Rolls:
+              // If role === 'GM': Display full roll, formula, outcome
+              // If role !== 'GM' AND roll.rollerId === currentUserId: Display full roll
+              // If role !== 'GM' AND roll.rollerId !== currentUserId: Render masked card
+              const isMaskedForUser =
+                roll.scope === 'keeper' && role !== 'GM' && roll.rollerId !== currentUserId;
 
               if (isMaskedForUser) {
                 return (

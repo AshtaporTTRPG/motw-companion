@@ -1,8 +1,10 @@
 import React, { useState, useRef } from 'react';
-import { HunterProfile, HunterStats, StatType, BorrowedMove, CustomMove } from '../types/motw';
+import { HunterProfile, HunterStats, StatType, BorrowedMove, CustomMove, PlaybookGearCategory } from '../types/motw';
 import { PLAYBOOKS } from '../data/playbooks';
+import { PLAYBOOK_GEAR_CONFIGS } from '../data/gearConfig';
+import { UNIVERSAL_ADVANCED_IMPROVEMENTS } from '../data/expansionPlaybooks';
 import { PlaybookSubPanel } from './PlaybookSubPanel';
-import { detectStatFromMove } from '../utils/rollEngine';
+import { detectStatFromMove, getAttackRollStat, getAttackButtonLabel } from '../utils/rollEngine';
 import {
   Heart,
   Clover,
@@ -25,17 +27,35 @@ import {
   Crown,
 } from 'lucide-react';
 
-const ADVANCED_IMPROVEMENTS: string[] = [
-  'Get +1 to any rating (max +3)',
-  'Mark two of the basic moves as advanced',
-  'Mark another two of the basic moves as advanced',
-  'Erase one used Luck mark from your Luck track',
-  'Take a move from another playbook',
-  'Retire this hunter to safety',
-  'Remove a Doom, Dark Side, or Curse tag from your hunter',
-  'Change this hunter to a new type (change playbook)',
-  'Create a second hunter to play as well as this one',
-];
+export function getGearCategoriesForPlaybook(playbookNameOrId: string): PlaybookGearCategory[] {
+  if (!playbookNameOrId) return [];
+  const normalized = playbookNameOrId.toLowerCase().replace(/^(the\s+)/, '').replace(/\s+/g, '-').trim();
+  const directKey = 'the-' + normalized;
+  if (PLAYBOOK_GEAR_CONFIGS[directKey]) return PLAYBOOK_GEAR_CONFIGS[directKey];
+  if (PLAYBOOK_GEAR_CONFIGS[playbookNameOrId]) return PLAYBOOK_GEAR_CONFIGS[playbookNameOrId];
+  for (const [k, v] of Object.entries(PLAYBOOK_GEAR_CONFIGS)) {
+    const core = k.replace('the-', '');
+    if (normalized.includes(core) || core.includes(normalized)) {
+      return v;
+    }
+  }
+  return [];
+}
+
+export function extractCleanWeaponName(gearString: string): string {
+  let cleaned = gearString.replace(/^[^:]+:\s*/, '');
+  const parenIdx = cleaned.indexOf('(');
+  if (parenIdx !== -1) {
+    cleaned = cleaned.substring(0, parenIdx).trim();
+  }
+  return cleaned.trim() || gearString;
+}
+
+export function isAttackItem(item: string): boolean {
+  const lower = item.toLowerCase();
+  if (lower.includes('harm')) return true;
+  return /sword|blade|dagger|knife|axe|hammer|gun|pistol|revolver|rifle|shotgun|crossbow|bow|whip|trident|spear|blaster|cannon|flamethrower|chainsaw|baton|brass knuckles|machete|claws|fangs|talons|scalpel|taser|blackjack|natural attack/i.test(lower);
+}
 
 interface HunterTabProps {
   currentUserId: string;
@@ -299,7 +319,8 @@ export const HunterTab: React.FC<HunterTabProps> = ({
       customMoves: [],
       stats: { ...stats },
       selectedMoves: creationPlaybookDef.moves.slice(0, 2).map((m) => m.id),
-      gear: creationPlaybookDef.gearChoices.slice(0, 2).join('\n'),
+      gear: '',
+      selectedGear: [],
       luckSpecial: creationPlaybookDef.luckSpecial,
       improvementsTaken: [],
       createdAt: Date.now(),
@@ -982,17 +1003,40 @@ export const HunterTab: React.FC<HunterTabProps> = ({
                       </div>
 
                       {moveStat && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onQuickRoll(moveStat, move.name);
-                          }}
-                          title={`Roll ${move.name} (+${moveStat})`}
-                          className="text-[10px] px-2 py-0.5 rounded bg-amber-600/30 hover:bg-amber-500 hover:text-neutral-950 text-amber-300 font-bold cursor-pointer border border-amber-500/50 flex items-center gap-1 shrink-0 ml-1 shadow-xs transition-colors"
-                        >
-                          <Dices className="w-3 h-3" />
-                          <span>Roll</span>
-                        </button>
+                        (() => {
+                          const isWhammy = /whammy/i.test(move.name);
+                          const isCombatMag = /combat magic/i.test(move.name);
+                          const isAttackMove = isWhammy || isCombatMag;
+                          const attackMoveName = isWhammy ? 'The Big Whammy' : 'Combat Magic';
+                          const attackLabel = isAttackMove
+                            ? getAttackButtonLabel(attackMoveName, activeHunter, {
+                                isBigWhammy: isWhammy,
+                                isCombatMagic: isCombatMag,
+                              })
+                            : null;
+
+                          return (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isAttackMove) {
+                                  onQuickRoll('weird', `Kick Some Ass (${attackMoveName})`);
+                                } else {
+                                  onQuickRoll(moveStat, move.name);
+                                }
+                              }}
+                              title={attackLabel || `Roll ${move.name} (+${moveStat})`}
+                              className={`text-[10px] px-2 py-0.5 rounded font-bold cursor-pointer border flex items-center gap-1 shrink-0 ml-1 shadow-xs transition-colors ${
+                                isAttackMove
+                                  ? 'bg-red-950/80 hover:bg-red-900 text-red-200 border-red-700/60'
+                                  : 'bg-amber-600/30 hover:bg-amber-500 hover:text-neutral-950 text-amber-300 border-amber-500/50'
+                              }`}
+                            >
+                              <Dices className="w-3 h-3" />
+                              <span>{isAttackMove ? attackLabel : 'Roll'}</span>
+                            </button>
+                          );
+                        })()
                       )}
                     </div>
 
@@ -1209,20 +1253,176 @@ export const HunterTab: React.FC<HunterTabProps> = ({
             )}
           </div>
 
-          {/* Gear & Weapons Area */}
-          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-2.5 space-y-1.5 shadow-xs">
+          {/* Gear & Weapons Area with Interactive Selection Chips & Attack Engine */}
+          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-2.5 space-y-3 shadow-xs">
             <div className="flex items-center justify-between text-xs font-bold text-neutral-200">
-              <span className="flex items-center gap-1">
-                <Crosshair className="w-3.5 h-3.5 text-amber-400" /> Weapons & Gear
+              <span className="flex items-center gap-1.5">
+                <Crosshair className="w-3.5 h-3.5 text-amber-400" />
+                <span>Weapons & Gear Selection</span>
+              </span>
+              <span className="text-[10px] text-amber-400 font-mono">
+                {(activeHunter.selectedGear || []).length} items equipped
               </span>
             </div>
-            <textarea
-              value={activeHunter.gear || ''}
-              onChange={(e) => onUpdateHunter({ ...activeHunter, gear: e.target.value })}
-              placeholder="e.g. Remington 12-gauge shotgun (3-harm close reload messy), silver knife (2-harm hand holy), flashlight..."
-              rows={3}
-              className="w-full bg-neutral-950/80 border border-neutral-800 rounded p-2 text-xs text-neutral-200 placeholder-neutral-500 resize-none focus:outline-none focus:border-neutral-600 leading-relaxed"
-            />
+
+            {/* Interactive Gear Categories from Playbook Config */}
+            {(() => {
+              const categories = getGearCategoriesForPlaybook(activeHunter.playbook);
+              const selectedList = activeHunter.selectedGear || [];
+
+              if (categories.length === 0) {
+                return null;
+              }
+
+              return (
+                <div className="space-y-3">
+                  {categories.map((cat, catIdx) => {
+                    const pickedInCat = selectedList.filter((item) => cat.options.includes(item));
+                    const isAtMax = pickedInCat.length >= cat.max;
+
+                    return (
+                      <div key={cat.name || catIdx} className="space-y-1.5 bg-neutral-950/50 p-2 rounded border border-neutral-800/70">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="font-bold text-neutral-300">
+                            {cat.name}
+                          </span>
+                          <span
+                            className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
+                              isAtMax
+                                ? 'bg-amber-950/60 text-amber-300 border-amber-700/60 font-semibold'
+                                : 'bg-neutral-900 text-neutral-400 border-neutral-800'
+                            }`}
+                          >
+                            {pickedInCat.length}/{cat.max} {cat.min !== undefined && cat.min !== cat.max ? `(pick ${cat.min}–${cat.max})` : 'picked'}
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap gap-1.5">
+                          {cat.options.map((opt) => {
+                            const isChecked = selectedList.includes(opt);
+                            const isOptionDisabled = !isChecked && isAtMax;
+
+                            return (
+                              <button
+                                key={opt}
+                                type="button"
+                                disabled={isOptionDisabled}
+                                onClick={() => {
+                                  if (isChecked) {
+                                    // Remove
+                                    const nextGear = selectedList.filter((item) => item !== opt);
+                                    onUpdateHunter({ ...activeHunter, selectedGear: nextGear });
+                                  } else {
+                                    // Add if under max
+                                    if (isAtMax) return;
+                                    const nextGear = [...selectedList, opt];
+                                    onUpdateHunter({ ...activeHunter, selectedGear: nextGear });
+                                  }
+                                }}
+                                className={`px-2 py-1 rounded text-[11px] border text-left cursor-pointer transition-all flex items-center gap-1.5 ${
+                                  isChecked
+                                    ? 'bg-amber-500/20 text-amber-200 border-amber-500 font-semibold shadow-xs ring-1 ring-amber-500/30'
+                                    : isOptionDisabled
+                                    ? 'bg-neutral-950/40 text-neutral-600 border-neutral-900 cursor-not-allowed opacity-50'
+                                    : 'bg-neutral-900/90 text-neutral-300 border-neutral-800 hover:border-neutral-600 hover:text-white'
+                                }`}
+                              >
+                                {isChecked ? (
+                                  <CheckSquare className="w-3 h-3 text-amber-400 shrink-0" />
+                                ) : (
+                                  <Square className="w-3 h-3 text-neutral-500 shrink-0" />
+                                )}
+                                <span>{opt}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
+            {/* Active Weapon Attacks (Kick Some Ass Action Triggers) */}
+            {(() => {
+              const selectedList = activeHunter.selectedGear || [];
+              const rawGearLines = (activeHunter.gear || '')
+                .split('\n')
+                .map((l) => l.trim())
+                .filter(Boolean);
+
+              // Gather all weapon/attack items from selected chips and custom gear
+              const allAttackStrings = Array.from(
+                new Set([
+                  ...selectedList.filter((item) => isAttackItem(item)),
+                  ...rawGearLines.filter((line) => isAttackItem(line)),
+                ])
+              );
+
+              if (allAttackStrings.length === 0) {
+                return (
+                  <div className="p-2 rounded bg-neutral-950/40 border border-neutral-800/60 text-center text-[11px] text-neutral-500 italic">
+                    Select weapons above to activate direct Kick Some Ass attack buttons.
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-1.5 pt-2 border-t border-neutral-800/80">
+                  <div className="flex items-center justify-between text-xs font-bold text-red-300">
+                    <span className="flex items-center gap-1.5">
+                      <span>⚔️</span> Kick Some Ass Attack Triggers
+                    </span>
+                    <span className="text-[10px] text-neutral-400 font-mono">
+                      Dynamic Stat Override Active
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {allAttackStrings.map((item) => {
+                      const cleanName = extractCleanWeaponName(item);
+                      const stat = getAttackRollStat(activeHunter, { attackName: cleanName });
+                      const buttonLabel = getAttackButtonLabel(cleanName, activeHunter);
+                      const statMod = activeHunter.stats[stat] ?? 0;
+                      const statFormatted = stat.charAt(0).toUpperCase() + stat.slice(1);
+
+                      return (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => onQuickRoll(stat, `Kick Some Ass (${cleanName})`)}
+                          className="w-full px-2.5 py-1.5 bg-red-950/70 hover:bg-red-900/90 text-red-100 hover:text-white border border-red-700/60 rounded text-xs font-bold flex items-center justify-between shadow-xs transition-colors cursor-pointer group"
+                          title={`Roll Kick Some Ass with ${cleanName} (+${statFormatted})`}
+                        >
+                          <span className="flex items-center gap-1.5 truncate">
+                            <span className="group-hover:scale-110 transition-transform">⚔️</span>
+                            <span className="truncate">{buttonLabel}</span>
+                          </span>
+                          <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-red-900/60 text-red-200 border border-red-700/40 shrink-0 ml-2">
+                            +{statFormatted} ({statMod >= 0 ? `+${statMod}` : statMod})
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Custom Equipment & Notes Field */}
+            <div className="space-y-1 pt-1 border-t border-neutral-800/80">
+              <label className="text-[11px] font-semibold text-neutral-400 block">
+                Additional Equipment, Custom Items & Notes:
+              </label>
+              <textarea
+                value={activeHunter.gear || ''}
+                onChange={(e) => onUpdateHunter({ ...activeHunter, gear: e.target.value })}
+                placeholder="e.g. Remington 12-gauge shotgun (3-harm close reload messy), silver knife (2-harm hand holy), flashlight, lockpicks..."
+                rows={2}
+                className="w-full bg-neutral-950/80 border border-neutral-800 rounded p-1.5 text-xs text-neutral-200 placeholder-neutral-500 resize-none focus:outline-none focus:border-neutral-600 leading-relaxed font-sans"
+              />
+            </div>
           </div>
         </div>
       )}
@@ -1391,7 +1591,7 @@ export const HunterTab: React.FC<HunterTabProps> = ({
                   Veterans of the hunt may choose from the advanced list below:
                 </p>
                 <div className="space-y-1.5">
-                  {ADVANCED_IMPROVEMENTS.map((adv, idx) => (
+                  {(selectedPlaybookDef?.advancedImprovements || UNIVERSAL_ADVANCED_IMPROVEMENTS).map((adv, idx) => (
                     <button
                       key={`adv-${idx}`}
                       onClick={() => handleSelectImprovement(adv)}

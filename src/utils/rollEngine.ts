@@ -283,3 +283,82 @@ export function executePbtaRoll({
       : undefined,
   };
 }
+
+/**
+ * Dynamic Stat Determination for Attacks (Kick Some Ass):
+ * - Check if hunter is The Monstrous with "Unholy Strength" selected -> roll with +Weird.
+ * - Check if hunter is The Action Scientist with Area of Study "Violence" -> roll with +Sharp.
+ * - Check if hunter is The Spell-Slinger using Combat Magic -> roll with +Weird.
+ * - Check if hunter is The Spooky using "The Big Whammy" -> roll with +Weird.
+ * - Default for all other attacks -> roll with +Tough.
+ */
+export function getAttackRollStat(
+  hunter: HunterProfile | null,
+  context?: { isCombatMagic?: boolean; isBigWhammy?: boolean; attackName?: string }
+): StatType {
+  if (!hunter) return 'tough';
+  const pbLower = (hunter.playbook || '').toLowerCase().trim();
+
+  // 1. The Monstrous with "Unholy Strength" selected -> roll with +Weird
+  if (pbLower.includes('monstrous')) {
+    const moves = hunter.selectedMoves || [];
+    const hasUnholyStrength = moves.some((m) => {
+      const lower = m.toLowerCase();
+      return lower.includes('unholy-strength') || lower.includes('unholy strength');
+    });
+    if (hasUnholyStrength) return 'weird';
+  }
+
+  // 2. The Action Scientist with Area of Study "Violence" -> roll with +Sharp
+  if (pbLower.includes('action scientist')) {
+    const study = (
+      hunter.actionScientistFocus ||
+      hunter.subFeatures?.actionScientistFocus ||
+      ''
+    ).toLowerCase();
+    if (study.includes('violence')) return 'sharp';
+  }
+
+  // 3. The Spell-Slinger using Combat Magic -> roll with +Weird
+  const isCombatMagic =
+    context?.isCombatMagic ||
+    (context?.attackName && context.attackName.toLowerCase().includes('combat magic'));
+  if (isCombatMagic || pbLower.includes('spell-slinger') || pbLower.includes('spellslinger')) {
+    if (isCombatMagic) return 'weird';
+  }
+
+  // 4. The Spooky using "The Big Whammy" -> roll with +Weird
+  const isBigWhammy =
+    context?.isBigWhammy ||
+    (context?.attackName && context.attackName.toLowerCase().includes('big whammy'));
+  if (isBigWhammy) return 'weird';
+
+  if (pbLower.includes('spooky')) {
+    const moves = hunter.selectedMoves || [];
+    const hasBigWhammyMove = moves.some((m) => {
+      const lower = m.toLowerCase();
+      return lower.includes('big-whammy') || lower.includes('big whammy');
+    });
+    if (hasBigWhammyMove && (isBigWhammy || (context?.attackName && /whammy/i.test(context.attackName)))) {
+      return 'weird';
+    }
+  }
+
+  // Default for all other attacks -> roll with +Tough
+  return 'tough';
+}
+
+/**
+ * Generates an attack button label conforming to the requirement:
+ * e.g., ⚔️ Kick Some Ass: Claws (+Tough) or ⚔️ Kick Some Ass: Claws (+Weird) if Unholy Strength is active.
+ */
+export function getAttackButtonLabel(
+  attackName: string,
+  hunter: HunterProfile | null,
+  context?: { isCombatMagic?: boolean; isBigWhammy?: boolean }
+): string {
+  const stat = getAttackRollStat(hunter, { ...context, attackName });
+  const statFormatted = stat.charAt(0).toUpperCase() + stat.slice(1);
+  return `⚔️ Kick Some Ass: ${attackName} (+${statFormatted})`;
+}
+

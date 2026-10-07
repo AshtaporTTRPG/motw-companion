@@ -6,6 +6,7 @@ import {
   StatType,
 } from '../types/motw';
 import { PLAYBOOKS } from '../data/playbooks';
+import { getAttackRollStat, getAttackButtonLabel } from '../utils/rollEngine';
 import {
   Sparkles,
   Shield,
@@ -287,11 +288,25 @@ export const PlaybookSubPanel: React.FC<PlaybookSubPanelProps> = ({
           </div>
 
           {/* Computed Weapon Callout */}
-          <div className="bg-neutral-950 border border-amber-500/40 rounded p-2 text-xs">
-            <span className="text-[10px] text-neutral-400 block uppercase font-mono">
-              Computed Weapon Profile:
-            </span>
-            <span className="text-amber-300 font-mono font-bold">{computedProfile}</span>
+          <div className="bg-neutral-950 border border-amber-500/40 rounded p-2 text-xs flex items-center justify-between gap-2">
+            <div>
+              <span className="text-[10px] text-neutral-400 block uppercase font-mono">
+                Computed Weapon Profile:
+              </span>
+              <span className="text-amber-300 font-mono font-bold">{computedProfile}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const weaponName = currentWeapon.form || 'Destined Weapon';
+                const attackStat = getAttackRollStat(hunter, { attackName: weaponName });
+                onQuickRoll(attackStat, `Kick Some Ass (${weaponName})`);
+              }}
+              className="px-2 py-1 bg-amber-600/30 hover:bg-amber-500 text-amber-200 hover:text-neutral-950 border border-amber-500/60 rounded text-[10px] font-bold cursor-pointer transition-colors shrink-0"
+              title="Roll Kick Some Ass with Destined Weapon"
+            >
+              {getAttackButtonLabel(currentWeapon.form || 'Destined Weapon', hunter)}
+            </button>
           </div>
         </div>
       </div>
@@ -1507,16 +1522,20 @@ export const PlaybookSubPanel: React.FC<PlaybookSubPanelProps> = ({
             <span className="text-[10px] text-neutral-400 block uppercase font-mono tracking-wider">
               Resulting Natural Attack Profile:
             </span>
-            <div className="flex items-center justify-between">
-              <span className="text-red-300 font-mono font-bold text-sm tracking-tight">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-red-300 font-mono font-bold text-sm tracking-tight truncate">
                 {getSummary()}
               </span>
               <button
-                onClick={() => onQuickRoll('tough', `Natural Attack: ${getSummary()}`)}
-                className="px-2 py-0.5 bg-red-950/80 hover:bg-red-900 text-red-200 border border-red-700/60 rounded text-[10px] font-bold cursor-pointer"
+                type="button"
+                onClick={() => {
+                  const attackStat = getAttackRollStat(hunter, { attackName: getSummary() });
+                  onQuickRoll(attackStat, `Kick Some Ass (${getSummary()})`);
+                }}
+                className="px-2 py-1 bg-red-950/80 hover:bg-red-900 text-red-200 border border-red-700/60 rounded text-[10px] font-bold cursor-pointer shrink-0 transition-colors"
                 title="Roll Kick Some Ass with this natural attack"
               >
-                🎲 Roll Attack
+                {getAttackButtonLabel(getSummary(), hunter)}
               </button>
             </div>
           </div>
@@ -1649,18 +1668,33 @@ export const PlaybookSubPanel: React.FC<PlaybookSubPanelProps> = ({
                   {area.effect}
                 </p>
 
-                {isSelected && area.stat && (
+                {isSelected && (
                   <div className="mt-2 pl-6 flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onQuickRoll(area.stat!, `${area.name}: Research Roll`);
-                      }}
-                      className="px-2 py-0.5 bg-cyan-600/30 hover:bg-cyan-500 text-cyan-200 hover:text-neutral-950 border border-cyan-500/60 rounded text-[10px] font-bold cursor-pointer transition-colors"
-                    >
-                      🎲 Roll +{area.stat.toUpperCase()} ({area.name})
-                    </button>
+                    {area.name.toLowerCase().includes('violence') ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onQuickRoll('sharp', 'Kick Some Ass (Violence)');
+                        }}
+                        className="px-2 py-0.5 bg-red-600/30 hover:bg-red-500 text-red-200 hover:text-white border border-red-500/60 rounded text-[10px] font-bold cursor-pointer transition-colors"
+                      >
+                        {getAttackButtonLabel('Violence', hunter)}
+                      </button>
+                    ) : (
+                      area.stat && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onQuickRoll(area.stat!, `${area.name}: Research Roll`);
+                          }}
+                          className="px-2 py-0.5 bg-cyan-600/30 hover:bg-cyan-500 text-cyan-200 hover:text-neutral-950 border border-cyan-500/60 rounded text-[10px] font-bold cursor-pointer transition-colors"
+                        >
+                          🎲 Roll +{area.stat.toUpperCase()} ({area.name})
+                        </button>
+                      )
+                    )}
                   </div>
                 )}
               </label>
@@ -1735,6 +1769,19 @@ export const PlaybookSubPanel: React.FC<PlaybookSubPanelProps> = ({
                   {opt}
                 </span>
               ))}
+            </div>
+          )}
+
+          {currentDef.subMechanics.title.includes('Combat Magic') && (
+            <div className="pt-2 flex items-center justify-between border-t border-neutral-800 mt-1">
+              <span className="text-[10px] text-purple-300 font-semibold">Explosive Arcane Firepower:</span>
+              <button
+                type="button"
+                onClick={() => onQuickRoll('weird', 'Kick Some Ass (Combat Magic)')}
+                className="px-2 py-0.5 bg-purple-900/60 hover:bg-purple-800 text-purple-200 border border-purple-500/60 rounded text-[10px] font-bold cursor-pointer transition-colors"
+              >
+                {getAttackButtonLabel('Combat Magic', hunter, { isCombatMagic: true })}
+              </button>
             </div>
           )}
         </div>
