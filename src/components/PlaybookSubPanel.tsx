@@ -124,6 +124,56 @@ export const PlaybookSubPanel: React.FC<PlaybookSubPanelProps> = ({
       ' '
     )} ${currentWeapon.material.toLowerCase()}`.trim();
 
+    const hasDoomTagRemover = Boolean(
+      (hunter.takenImprovements && hunter.takenImprovements.some(i => i.toLowerCase().includes('doom') || i.toLowerCase().includes('delete'))) ||
+      (hunter.advancementsTaken && hunter.advancementsTaken.some(i => i.toLowerCase().includes('doom') || i.toLowerCase().includes('delete'))) ||
+      (hunter.improvementsTaken && hunter.improvementsTaken.some(i => i.toLowerCase().includes('doom') || i.toLowerCase().includes('delete')))
+    );
+
+    const maxDoomTags = hasDoomTagRemover ? 1 : 2;
+
+    const handleToggleDoomTag = (tag: string) => {
+      if (selectedDoom.includes(tag)) {
+        onUpdateSubFeatures({
+          ...sub,
+          fateDoom: selectedDoom.filter((t) => t !== tag),
+        });
+      } else {
+        if (selectedDoom.length >= maxDoomTags) {
+          onUpdateSubFeatures({
+            ...sub,
+            fateDoom: [...selectedDoom.slice(1), tag],
+          });
+        } else {
+          onUpdateSubFeatures({
+            ...sub,
+            fateDoom: [...selectedDoom, tag],
+          });
+        }
+      }
+    };
+
+    const handleToggleHeroicTag = (tag: string) => {
+      if (selectedHeroic.includes(tag)) {
+        if (hasDoomTagRemover) {
+          onUpdateSubFeatures({
+            ...sub,
+            fateHeroic: selectedHeroic.filter((t) => t !== tag),
+          });
+        } else {
+          onUpdateSubFeatures({
+            ...sub,
+            fateHeroic: toggleArrayItem(sub.fateHeroic, tag, 2),
+          });
+        }
+      } else {
+        onUpdateSubFeatures({
+          ...sub,
+          fateHeroic: toggleArrayItem(sub.fateHeroic, tag, 2),
+        });
+      }
+    };
+
     return (
       <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-2.5 space-y-3 shadow-xs">
         <div className="flex items-center justify-between text-xs font-bold text-amber-300">
@@ -131,16 +181,58 @@ export const PlaybookSubPanel: React.FC<PlaybookSubPanelProps> = ({
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
             The Chosen: Fate & Special Weapon
           </span>
-          <span className="text-[10px] text-amber-400/80 font-mono uppercase">Playbook Sub-System</span>
+          <span className="text-[10px] text-amber-400/80 font-mono uppercase">
+            {hasDoomTagRemover ? '⭐ Doom Remover Unlocked' : 'Playbook Sub-System'}
+          </span>
         </div>
+
+        {/* Interactive Tag Remover Banner when advanced improvement taken */}
+        {hasDoomTagRemover && (
+          <div className="p-2 rounded bg-red-950/40 border border-red-500/60 text-xs space-y-1.5">
+            <div className="flex items-center justify-between text-red-300 font-bold">
+              <span className="flex items-center gap-1.5">
+                <span>⭐</span> Fate Tag Remover Unlocked (Advanced Improvement)
+              </span>
+              <span className="text-[10px] font-mono uppercase bg-red-900/60 text-red-200 px-1.5 py-0.5 rounded">
+                Active
+              </span>
+            </div>
+            <p className="text-[11px] text-neutral-300">
+              You can now clear 1 Doom tag (and optionally 1 Heroic tag). Click any active tag below to remove it from your Fate.
+            </p>
+            {selectedDoom.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                <span className="text-[10px] text-red-400 font-semibold">Active Doom:</span>
+                {selectedDoom.map((doom) => (
+                  <button
+                    key={doom}
+                    type="button"
+                    onClick={() => {
+                      onUpdateSubFeatures({
+                        ...sub,
+                        fateDoom: selectedDoom.filter((d) => d !== doom),
+                      });
+                    }}
+                    className="px-2 py-0.5 bg-red-900/80 hover:bg-red-800 text-red-100 rounded text-[10px] font-semibold border border-red-400/80 flex items-center gap-1 cursor-pointer"
+                    title={`Delete Doom tag: ${doom}`}
+                  >
+                    <span>✕ Delete {doom}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Fate Selection: 2 Heroic & 2 Doom tags */}
         <div className="space-y-2 border-b border-neutral-800/80 pb-2.5">
           <div className="flex items-center justify-between text-[11px]">
             <span className="font-semibold text-neutral-200">
-              Fate — Heroic Tags ({selectedHeroic.length}/2)
+              Fate — Heroic Tags ({selectedHeroic.length}/{hasDoomTagRemover ? 'up to 2' : '2'})
             </span>
-            <span className="text-[10px] text-neutral-400">Pick 2</span>
+            <span className="text-[10px] text-neutral-400">
+              {hasDoomTagRemover ? 'Pick 1–2' : 'Pick 2'}
+            </span>
           </div>
           <div className="flex flex-wrap gap-1">
             {heroicOptions.map((tag) => {
@@ -148,12 +240,8 @@ export const PlaybookSubPanel: React.FC<PlaybookSubPanelProps> = ({
               return (
                 <button
                   key={tag}
-                  onClick={() =>
-                    onUpdateSubFeatures({
-                      ...sub,
-                      fateHeroic: toggleArrayItem(sub.fateHeroic, tag, 2),
-                    })
-                  }
+                  type="button"
+                  onClick={() => handleToggleHeroicTag(tag)}
                   className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors cursor-pointer ${
                     active
                       ? 'bg-amber-500/20 text-amber-300 border-amber-500/70 font-bold'
@@ -168,9 +256,11 @@ export const PlaybookSubPanel: React.FC<PlaybookSubPanelProps> = ({
 
           <div className="flex items-center justify-between text-[11px] pt-1">
             <span className="font-semibold text-neutral-200">
-              Fate — Doom Tags ({selectedDoom.length}/2)
+              Fate — Doom Tags ({selectedDoom.length}/{hasDoomTagRemover ? '1' : '2'})
             </span>
-            <span className="text-[10px] text-neutral-400">Pick 2</span>
+            <span className="text-[10px] text-neutral-400">
+              {hasDoomTagRemover ? 'Max 1 (1 Deleted)' : 'Pick 2'}
+            </span>
           </div>
           <div className="flex flex-wrap gap-1">
             {doomOptions.map((tag) => {
@@ -178,12 +268,8 @@ export const PlaybookSubPanel: React.FC<PlaybookSubPanelProps> = ({
               return (
                 <button
                   key={tag}
-                  onClick={() =>
-                    onUpdateSubFeatures({
-                      ...sub,
-                      fateDoom: toggleArrayItem(sub.fateDoom, tag, 2),
-                    })
-                  }
+                  type="button"
+                  onClick={() => handleToggleDoomTag(tag)}
                   className={`px-2 py-0.5 rounded text-[10px] font-medium border transition-colors cursor-pointer ${
                     active
                       ? 'bg-red-950/40 text-red-300 border-red-500/70 font-bold'
@@ -295,6 +381,120 @@ export const PlaybookSubPanel: React.FC<PlaybookSubPanelProps> = ({
             <span className="text-amber-300 font-mono font-bold">{computedProfile}</span>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  // THE CHANGELING
+  if (playbookLower === 'the changeling' || playbookLower === 'changeling') {
+    const heritagePitfallOptions = [
+      'Iron vulnerability',
+      'Salt bound',
+      'Cannot lie',
+      'Fae debt',
+      'True name known',
+      'Threshold restricted',
+    ];
+
+    const hasRemovedHeritageTag = Boolean(
+      (hunter.takenImprovements && hunter.takenImprovements.some(i => i.toLowerCase().includes('remove') && i.toLowerCase().includes('heritage'))) ||
+      (hunter.advancementsTaken && hunter.advancementsTaken.some(i => i.toLowerCase().includes('remove') && i.toLowerCase().includes('heritage'))) ||
+      (hunter.improvementsTaken && hunter.improvementsTaken.some(i => i.toLowerCase().includes('remove') && i.toLowerCase().includes('heritage')))
+    );
+
+    const requiredCount = hasRemovedHeritageTag ? 2 : 3;
+    const selectedHeritage = sub.changelingHeritageTags || ['Iron vulnerability', 'Cannot lie', 'Fae debt'];
+
+    const handleToggleHeritage = (tag: string) => {
+      let next: string[];
+      if (selectedHeritage.includes(tag)) {
+        next = selectedHeritage.filter((t) => t !== tag);
+      } else {
+        if (selectedHeritage.length >= requiredCount) {
+          next = [...selectedHeritage.slice(1), tag];
+        } else {
+          next = [...selectedHeritage, tag];
+        }
+      }
+      onUpdateSubFeatures({
+        ...sub,
+        changelingHeritageTags: next,
+      });
+      if (onUpdateHunter) {
+        onUpdateHunter({
+          ...hunter,
+          subFeatures: {
+            ...sub,
+            changelingHeritageTags: next,
+          },
+        });
+      }
+    };
+
+    return (
+      <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-2.5 space-y-2.5 shadow-xs">
+        <div className="flex items-center justify-between text-xs font-bold text-emerald-300">
+          <span className="flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+            The Changeling: Unknown Heritage
+          </span>
+          <span className="text-[10px] text-emerald-400/80 font-mono uppercase">
+            {hasRemovedHeritageTag ? '⭐ Reduced to 2 Pitfalls' : 'Playbook Sub-System'}
+          </span>
+        </div>
+
+        <p className="text-[11px] text-neutral-400">
+          Your fae heritage grants uncanny capabilities but inflicts supernatural pitfalls.
+          {hasRemovedHeritageTag
+            ? ' (Advanced Unlock: One heritage pitfall removed! Required: 2 pitfalls).'
+            : ' Select 3 pitfalls from the list below.'}
+        </p>
+
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="font-semibold text-neutral-200">
+              Heritage Pitfalls ({selectedHeritage.length}/{requiredCount})
+            </span>
+            <span className="text-[10px] text-neutral-400">
+              {hasRemovedHeritageTag ? 'Pick 2' : 'Pick 3'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-1.5">
+            {heritagePitfallOptions.map((tag) => {
+              const active = selectedHeritage.includes(tag);
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => handleToggleHeritage(tag)}
+                  className={`p-2 rounded text-[11px] font-medium border text-left transition-colors cursor-pointer flex items-center justify-between gap-1.5 ${
+                    active
+                      ? 'bg-emerald-950/40 text-emerald-200 border-emerald-500/70 font-bold'
+                      : 'bg-neutral-950 text-neutral-400 border-neutral-800 hover:border-neutral-700'
+                  }`}
+                >
+                  <span>{tag}</span>
+                  <span className="font-mono text-xs">{active ? '✓' : ''}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {hasRemovedHeritageTag && (
+          <div className="p-2 rounded bg-emerald-950/40 border border-emerald-500/60 text-xs space-y-1">
+            <div className="flex items-center justify-between text-emerald-300 font-bold text-[11px]">
+              <span>⭐ Advanced Unlock: Heritage Pitfall Removed</span>
+              <span className="text-[10px] font-mono uppercase bg-emerald-900/60 text-emerald-200 px-1.5 py-0.5 rounded">
+                Active
+              </span>
+            </div>
+            <p className="text-[10px] text-neutral-300">
+              You have purged an ancient curse of your heritage. You only require 2 pitfalls, and can uncheck any tag.
+            </p>
+          </div>
+        )}
       </div>
     );
   }
@@ -1568,21 +1768,58 @@ export const PlaybookSubPanel: React.FC<PlaybookSubPanelProps> = ({
       },
     ];
 
-    const currentFocus = hunter.actionScientistFocus || sub.actionScientistFocus || 'Physics and Cosmology';
+    const hasSecondAreaAdvancement = Boolean(
+      (hunter.maxAreasOfStudy && hunter.maxAreasOfStudy >= 2) ||
+      (hunter.takenImprovements && hunter.takenImprovements.some(i => i.toLowerCase().includes('second area of study') || i.toLowerCase().includes('add a second area'))) ||
+      (hunter.advancementsTaken && hunter.advancementsTaken.some(i => i.toLowerCase().includes('second area of study') || i.toLowerCase().includes('add a second area'))) ||
+      (hunter.improvementsTaken && hunter.improvementsTaken.some(i => i.toLowerCase().includes('second area of study') || i.toLowerCase().includes('add a second area')))
+    );
 
-    const handleSelectFocus = (focusName: string) => {
-      const updatedSub = { ...sub, actionScientistFocus: focusName };
+    const maxDisciplines = hasSecondAreaAdvancement ? 2 : 1;
+
+    // Parse active focuses
+    const currentFocuses: string[] = sub.actionScientistFocuses && sub.actionScientistFocuses.length > 0
+      ? sub.actionScientistFocuses
+      : (hunter.actionScientistFocus || sub.actionScientistFocus || 'Physics and Cosmology')
+          .split(/,\s*/)
+          .filter(Boolean);
+
+    const handleToggleFocus = (focusName: string) => {
+      let nextFocuses: string[];
+      if (currentFocuses.includes(focusName)) {
+        if (currentFocuses.length > 1) {
+          nextFocuses = currentFocuses.filter((f) => f !== focusName);
+        } else {
+          nextFocuses = [focusName];
+        }
+      } else {
+        if (maxDisciplines === 1) {
+          nextFocuses = [focusName];
+        } else if (currentFocuses.length < maxDisciplines) {
+          nextFocuses = [...currentFocuses, focusName];
+        } else {
+          nextFocuses = [currentFocuses[currentFocuses.length - 1], focusName];
+        }
+      }
+
+      const focusString = nextFocuses.join(', ');
+      const updatedSub = {
+        ...sub,
+        actionScientistFocus: focusString,
+        actionScientistFocuses: nextFocuses,
+      };
       onUpdateSubFeatures(updatedSub);
       if (onUpdateHunter) {
         onUpdateHunter({
           ...hunter,
-          actionScientistFocus: focusName,
+          maxAreasOfStudy: maxDisciplines,
+          actionScientistFocus: focusString,
           subFeatures: updatedSub,
         });
       }
     };
 
-    const activeAreaObj = areasOfStudy.find((a) => a.name === currentFocus) || areasOfStudy[0];
+    const activeAreaObjs = areasOfStudy.filter((a) => currentFocuses.includes(a.name));
 
     return (
       <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-2.5 space-y-2.5 shadow-xs">
@@ -1591,21 +1828,24 @@ export const PlaybookSubPanel: React.FC<PlaybookSubPanelProps> = ({
             <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
             The Action Scientist: Area of Study
           </span>
-          <span className="text-[10px] text-cyan-400/80 font-mono uppercase">Pick One Specialization</span>
+          <span className="text-[10px] text-cyan-400/80 font-mono uppercase">
+            {maxDisciplines === 2 ? '⭐ 2 Disciplines Unlocked' : 'Pick One Specialization'}
+          </span>
         </div>
 
         <p className="text-[11px] text-neutral-400">
-          Select your primary discipline. Your Area of Study grants unique analytical tools, bonus investigative options, or supernatural countermeasures.
+          Select your {maxDisciplines === 2 ? 'up to 2 disciplines' : 'primary discipline'}. Your Area of Study grants unique analytical tools, bonus investigative options, or supernatural countermeasures.
+          {maxDisciplines === 2 && ' (Advanced Improvement active: second area of study unlocked!).'}
         </p>
 
         {/* 7 Area of Study Selection Cards */}
         <div className="space-y-1.5">
           {areasOfStudy.map((area) => {
-            const isSelected = currentFocus === area.name;
+            const isSelected = currentFocuses.includes(area.name);
             return (
               <label
                 key={area.id}
-                onClick={() => handleSelectFocus(area.name)}
+                onClick={() => handleToggleFocus(area.name)}
                 className={`p-2 rounded-lg border text-left transition-colors cursor-pointer block ${
                   isSelected
                     ? 'bg-cyan-950/40 border-cyan-500/70 text-cyan-100 shadow-xs'
@@ -1615,10 +1855,10 @@ export const PlaybookSubPanel: React.FC<PlaybookSubPanelProps> = ({
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <input
-                      type="radio"
+                      type={maxDisciplines > 1 ? 'checkbox' : 'radio'}
                       name="action-scientist-focus"
                       checked={isSelected}
-                      onChange={() => handleSelectFocus(area.name)}
+                      onChange={() => handleToggleFocus(area.name)}
                       className="accent-cyan-400 shrink-0 mt-0.5"
                     />
                     <span className="text-base leading-none">{area.icon}</span>
@@ -1665,12 +1905,14 @@ export const PlaybookSubPanel: React.FC<PlaybookSubPanelProps> = ({
         {/* Active Focus Callout Card */}
         <div className="bg-neutral-950 border border-cyan-500/40 rounded p-2 text-xs space-y-1">
           <div className="flex items-center justify-between text-[10px] text-neutral-400 uppercase font-mono">
-            <span>Saved on Hunter Record (hunter.actionScientistFocus):</span>
-            <span className="text-cyan-400 font-bold">{activeAreaObj.name}</span>
+            <span>Saved on Hunter Record ({currentFocuses.length}/{maxDisciplines} active):</span>
+            <span className="text-cyan-400 font-bold">{currentFocuses.join(', ')}</span>
           </div>
-          <p className="text-[11px] text-cyan-200">
-            {activeAreaObj.icon} <strong>{activeAreaObj.name}:</strong> {activeAreaObj.effect}
-          </p>
+          {activeAreaObjs.map((ao) => (
+            <p key={ao.id} className="text-[11px] text-cyan-200">
+              {ao.icon} <strong>{ao.name}:</strong> {ao.effect}
+            </p>
+          ))}
         </div>
       </div>
     );

@@ -39,7 +39,6 @@ export const DiceTray: React.FC<DiceTrayProps> = ({
 }) => {
   const [selectedStat, setSelectedStat] = useState<StatType | 'none'>('sharp');
   const [modifier, setModifier] = useState<number>(0); // Range -3 to +3
-  const [forwardMod, setForwardMod] = useState<number>(0);
   const [scope, setScope] = useState<RollScope>('public');
   const [isRolling, setIsRolling] = useState(false);
   const [expandedOutcomeIds, setExpandedOutcomeIds] = useState<Record<string, boolean>>({});
@@ -96,7 +95,7 @@ export const DiceTray: React.FC<DiceTrayProps> = ({
       ? activeHunter.stats[selectedStat] ?? 0
       : 0;
 
-  const totalMod = statVal + modifier + forwardMod;
+  const totalMod = statVal + modifier;
 
   const handleRoll = () => {
     setIsRolling(true);
@@ -115,7 +114,7 @@ export const DiceTray: React.FC<DiceTrayProps> = ({
       rollerName: currentUserName || (role === 'GM' ? 'Keeper' : 'Hunter'),
       scope,
       modifier,
-      forwardMod,
+      forwardMod: 0,
     });
 
     setTimeout(() => {
@@ -127,9 +126,6 @@ export const DiceTray: React.FC<DiceTrayProps> = ({
         onAddRoll(rollData);
       }
       setIsRolling(false);
-      if (forwardMod !== 0) {
-        setForwardMod(0);
-      }
     }, 150);
   };
 
@@ -227,23 +223,25 @@ export const DiceTray: React.FC<DiceTrayProps> = ({
         })}
       </div>
 
-      {/* Grouped Modifier, Conditions & Visibility row */}
-      <div className="flex items-center justify-between gap-1 bg-neutral-900/90 border border-neutral-800 rounded p-1.5 shrink-0 text-xs">
-        {/* Left: Mod: [-] +0 [+] */}
+      {/* Grouped Modifier, Presets & Visibility row */}
+      <div className="flex items-center justify-between gap-1.5 bg-neutral-900/90 border border-neutral-800 rounded p-1.5 shrink-0 text-xs flex-wrap">
+        {/* Left: Stepper: Mod: [-] [ {modifier >= 0 ? '+' + modifier : modifier} ] [+] */}
         <div className="flex items-center gap-1 shrink-0">
           <span className="text-[11px] font-semibold text-neutral-400">Mod:</span>
           <div className="inline-flex items-center bg-neutral-950 border border-neutral-700 rounded h-7">
             <button
+              type="button"
               onClick={() => setModifier((m) => Math.max(-3, m - 1))}
               className="w-7 h-full flex items-center justify-center text-xs text-neutral-300 hover:bg-neutral-800 rounded-l cursor-pointer font-bold"
               title="Decrease modifier"
             >
               -
             </button>
-            <span className="w-6 text-center text-xs font-mono font-bold text-amber-300">
+            <span className="w-7 text-center text-xs font-mono font-bold text-amber-300">
               {modifier >= 0 ? `+${modifier}` : modifier}
             </span>
             <button
+              type="button"
               onClick={() => setModifier((m) => Math.min(3, m + 1))}
               className="w-7 h-full flex items-center justify-center text-xs text-neutral-300 hover:bg-neutral-800 rounded-r cursor-pointer font-bold"
               title="Increase modifier"
@@ -253,46 +251,33 @@ export const DiceTray: React.FC<DiceTrayProps> = ({
           </div>
         </div>
 
-        {/* Center: Quick condition chips */}
+        {/* Center: Quick Preset Pills: [-2] [-1] [+0] [+1] [+2] */}
         <div className="flex items-center gap-1 shrink-0">
-          <button
-            onClick={() => setForwardMod((f) => (f === 1 ? 0 : 1))}
-            className={`px-1.5 h-7 rounded text-[11px] border transition-colors cursor-pointer flex items-center ${
-              forwardMod === 1
-                ? 'bg-amber-500 text-neutral-950 border-amber-400 font-bold'
-                : 'bg-neutral-950 border-neutral-700 text-neutral-300 hover:border-neutral-500'
-            }`}
-            title="+1 Forward"
-          >
-            +1 Fwd
-          </button>
-          <button
-            onClick={() => setForwardMod((f) => (f === -1 ? 0 : -1))}
-            className={`px-1.5 h-7 rounded text-[11px] border transition-colors cursor-pointer flex items-center ${
-              forwardMod === -1
-                ? 'bg-red-500 text-neutral-950 border-red-400 font-bold'
-                : 'bg-neutral-950 border-neutral-700 text-neutral-300 hover:border-neutral-500'
-            }`}
-            title="-1 Forward"
-          >
-            -1 Fwd
-          </button>
-          <button
-            onClick={() => setForwardMod((f) => (f === 2 ? 0 : 2))}
-            className={`px-1.5 h-7 rounded text-[11px] border transition-colors cursor-pointer flex items-center ${
-              forwardMod === 2
-                ? 'bg-indigo-500 text-white border-indigo-400 font-bold'
-                : 'bg-neutral-950 border-neutral-700 text-neutral-300 hover:border-neutral-500'
-            }`}
-            title="+1 Ongoing"
-          >
-            +1 Ong
-          </button>
+          {[-2, -1, 0, 1, 2].map((preset) => {
+            const isActive = modifier === preset;
+            const label = preset >= 0 ? `+${preset}` : `${preset}`;
+            return (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => setModifier(preset)}
+                className={`h-7 px-2 rounded text-[11px] font-mono font-bold border transition-colors cursor-pointer ${
+                  isActive
+                    ? 'bg-amber-500 text-neutral-950 border-amber-400 shadow-xs'
+                    : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:border-neutral-600 hover:text-white'
+                }`}
+                title={`Set modifier to ${label}`}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
 
         {/* Right: Compact visibility pill */}
         <div className="flex items-center bg-neutral-950 border border-neutral-800 rounded p-0.5 text-[10px] h-7 shrink-0">
           <button
+            type="button"
             onClick={() => setScope('public')}
             className={`px-1.5 py-0.5 rounded transition-colors cursor-pointer ${
               scope === 'public'
@@ -304,6 +289,7 @@ export const DiceTray: React.FC<DiceTrayProps> = ({
             Public
           </button>
           <button
+            type="button"
             onClick={() => setScope('keeper')}
             className={`px-1.5 py-0.5 rounded transition-colors cursor-pointer ${
               scope === 'keeper'
@@ -315,6 +301,7 @@ export const DiceTray: React.FC<DiceTrayProps> = ({
             Keeper
           </button>
           <button
+            type="button"
             onClick={() => setScope('self')}
             className={`px-1.5 py-0.5 rounded transition-colors cursor-pointer ${
               scope === 'self'
@@ -337,7 +324,7 @@ export const DiceTray: React.FC<DiceTrayProps> = ({
         <span className="flex items-center gap-1.5">
           <span>🎲</span>
           <span>
-            Roll 2d6 {selectedStat !== 'none' ? `+ ${statFormattedName}` : ''} ({totalMod >= 0 ? `+${totalMod}` : totalMod})
+            Roll 2d6 {selectedStat !== 'none' ? `+ ${selectedStat}` : ''} ({totalMod >= 0 ? `+${totalMod}` : totalMod})
           </span>
         </span>
       </button>

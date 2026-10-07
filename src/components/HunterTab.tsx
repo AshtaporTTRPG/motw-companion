@@ -57,6 +57,65 @@ export function isAttackItem(item: string): boolean {
   return /sword|blade|dagger|knife|axe|hammer|gun|pistol|revolver|rifle|shotgun|crossbow|bow|whip|trident|spear|blaster|cannon|flamethrower|chainsaw|baton|brass knuckles|machete|claws|fangs|talons|scalpel|taser|blackjack|natural attack/i.test(lower);
 }
 
+export function getImprovementSlotId(
+  playbookId: string,
+  imp: string,
+  idx: number,
+  isAdvanced: boolean,
+  allImps: string[]
+): string {
+  const isMovePick = /take another .* move/i.test(imp);
+  const isBorrowPick = /move from another playbook/i.test(imp);
+
+  if (isMovePick) {
+    let pickCount = 1;
+    for (let i = 0; i < idx; i++) {
+      if (/take another .* move/i.test(allImps[i])) {
+        pickCount++;
+      }
+    }
+    return `move_pick_${pickCount}`;
+  }
+
+  if (isBorrowPick) {
+    let borrowCount = 1;
+    for (let i = 0; i < idx; i++) {
+      if (/move from another playbook/i.test(allImps[i])) {
+        borrowCount++;
+      }
+    }
+    return `borrow_pick_${borrowCount}`;
+  }
+
+  const slug = imp
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+  let occurrence = 1;
+  for (let i = 0; i < idx; i++) {
+    if (allImps[i] === imp) {
+      occurrence++;
+    }
+  }
+
+  return `${isAdvanced ? 'adv' : 'std'}_${slug}_${occurrence}`;
+}
+
+export function isImprovementTaken(hunter: HunterProfile | null, slotId: string, impText: string): boolean {
+  if (!hunter) return false;
+  const taken = hunter.takenImprovements || [];
+  if (taken.includes(slotId)) return true;
+  if (slotId.startsWith('move_pick_') && taken.includes(slotId)) return true;
+  if (slotId.startsWith('borrow_pick_') && taken.includes(slotId)) return true;
+  if (taken.includes(impText) && !/take another .* move|move from another playbook/i.test(impText)) {
+    return true;
+  }
+  const legacy = hunter.advancementsTaken || hunter.improvementsTaken || [];
+  if (legacy.includes(slotId)) return true;
+  return false;
+}
+
 interface HunterTabProps {
   currentUserId: string;
   currentUserName: string;
@@ -85,6 +144,39 @@ export const HunterTab: React.FC<HunterTabProps> = ({
   const [isRosterOpen, setIsRosterOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isLevelUpModalOpen, setIsLevelUpModalOpen] = useState(false);
+  const [pendingStatPick, setPendingStatPick] = useState<{ imp: string; slotId: string } | null>(null);
+
+  // Play Mode (Default / Lock Active) vs Edit Mode Toggle
+  const [sheetModeState, setSheetModeState] = useState<'play' | 'edit'>(() => {
+    try {
+      const saved = localStorage.getItem('motw_sheet_mode');
+      if (saved === 'edit' || saved === 'play') return saved;
+    } catch {}
+    return 'play';
+  });
+
+  const sheetMode = activeHunter?.sheetMode || sheetModeState;
+
+  const handleToggleSheetMode = () => {
+    const nextMode = sheetMode === 'play' ? 'edit' : 'play';
+    setSheetModeState(nextMode);
+    try {
+      localStorage.setItem('motw_sheet_mode', nextMode);
+    } catch {}
+    if (activeHunter) {
+      onUpdateHunter({ ...activeHunter, sheetMode: nextMode });
+    }
+  };
+
+  // Move Expand/Collapse Accordion State
+  const [expandedMoveIds, setExpandedMoveIds] = useState<Record<string, boolean>>({});
+
+  const toggleMoveAccordion = (moveId: string) => {
+    setExpandedMoveIds((prev) => ({
+      ...prev,
+      [moveId]: prev[moveId] === undefined ? false : !prev[moveId],
+    }));
+  };
 
   // Borrow Playbook Move State
   const [isBorrowMoveModalOpen, setIsBorrowMoveModalOpen] = useState(false);
@@ -194,6 +286,13 @@ export const HunterTab: React.FC<HunterTabProps> = ({
           gear: parsed.gear || '',
           luckSpecial: parsed.luckSpecial || '',
           improvementsTaken: Array.isArray(parsed.improvementsTaken) ? parsed.improvementsTaken : [],
+          takenImprovements: Array.isArray(parsed.takenImprovements)
+            ? parsed.takenImprovements
+            : (Array.isArray(parsed.advancementsTaken)
+                ? parsed.advancementsTaken
+                : (Array.isArray(parsed.improvementsTaken) ? parsed.improvementsTaken : [])),
+          maxAreasOfStudy: typeof parsed.maxAreasOfStudy === 'number' ? parsed.maxAreasOfStudy : 1,
+          sheetMode: parsed.sheetMode === 'edit' ? 'edit' : 'play',
           subFeatures: parsed.subFeatures || {},
           actionScientistFocus: parsed.actionScientistFocus || parsed.subFeatures?.actionScientistFocus,
           ownerId: parsed.ownerId || currentUserId,
@@ -315,6 +414,9 @@ export const HunterTab: React.FC<HunterTabProps> = ({
       experience: 0,
       levelUpCount: 0,
       advancementsTaken: [],
+      takenImprovements: [],
+      maxAreasOfStudy: 1,
+      sheetMode: 'play',
       borrowedMoves: [],
       customMoves: [],
       stats: { ...stats },
@@ -334,16 +436,47 @@ export const HunterTab: React.FC<HunterTabProps> = ({
   };
 
   // Level Up Improvement Selected
-  const handleSelectImprovement = (improvement: string) => {
+  const handleSelectImprovement = (improvement: string, slotId?: string, statBonus?: StatType) => {
     if (!activeHunter) return;
     const currentCount = activeHunter.levelUpCount || 0;
     const nextCount = currentCount + 1;
     const currentAdv = activeHunter.advancementsTaken || activeHunter.improvementsTaken || [];
     const nextAdv = [...currentAdv, improvement];
 
+    const currentTaken = activeHunter.takenImprovements || [];
+    const effectiveSlotId = slotId || improvement;
+    const nextTaken = currentTaken.includes(effectiveSlotId) ? currentTaken : [...currentTaken, effectiveSlotId];
+
     let nextLuck = activeHunter.luck;
     if (improvement.toLowerCase().includes('erase') && improvement.toLowerCase().includes('luck')) {
       nextLuck = Math.max(0, activeHunter.luck - 1);
+    }
+
+    const nextStats = { ...activeHunter.stats };
+    if (statBonus) {
+      nextStats[statBonus] = Math.min(3, (nextStats[statBonus] ?? 0) + 1);
+    } else {
+      const impLower = improvement.toLowerCase();
+      if (impLower.includes('+1 weird') && nextStats.weird < 3) {
+        nextStats.weird = Math.min(3, nextStats.weird + 1);
+      } else if (impLower.includes('+1 cool')) {
+        const maxC = impLower.includes('max +3') ? 3 : 2;
+        nextStats.cool = Math.min(maxC, nextStats.cool + 1);
+      } else if (impLower.includes('+1 sharp')) {
+        const maxS = impLower.includes('max +3') ? 3 : 2;
+        nextStats.sharp = Math.min(maxS, nextStats.sharp + 1);
+      } else if (impLower.includes('+1 charm')) {
+        const maxCh = impLower.includes('max +3') ? 3 : 2;
+        nextStats.charm = Math.min(maxCh, nextStats.charm + 1);
+      } else if (impLower.includes('+1 tough')) {
+        const maxT = impLower.includes('max +3') ? 3 : 2;
+        nextStats.tough = Math.min(maxT, nextStats.tough + 1);
+      }
+    }
+
+    let nextMaxAreas = activeHunter.maxAreasOfStudy || 1;
+    if (improvement.toLowerCase().includes('second area of study')) {
+      nextMaxAreas = 2;
     }
 
     const updated: HunterProfile = {
@@ -352,11 +485,15 @@ export const HunterTab: React.FC<HunterTabProps> = ({
       levelUpCount: nextCount,
       advancementsTaken: nextAdv,
       improvementsTaken: nextAdv,
+      takenImprovements: nextTaken,
+      stats: nextStats,
+      maxAreasOfStudy: nextMaxAreas,
       luck: nextLuck,
     };
 
     onUpdateHunter(updated);
     setIsLevelUpModalOpen(false);
+    setPendingStatPick(null);
 
     // If taking a move from another playbook, immediately trigger the Borrow Move modal
     if (improvement.toLowerCase().includes('move from another playbook')) {
@@ -619,58 +756,94 @@ export const HunterTab: React.FC<HunterTabProps> = ({
             </div>
           )}
 
-          {/* Header Card: Name, Playbook, Look */}
-          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-2.5 space-y-2 shadow-xs">
-            <div className="flex items-start justify-between gap-2">
-              <div className="space-y-0.5 min-w-0">
-                <div className="text-xs font-bold text-amber-400 font-mono">
-                  {activeHunter.name} — Basic ({Math.min(activeHunter.levelUpCount || 0, 5)}/5) Advanced ({Math.max(0, (activeHunter.levelUpCount || 0) - 5)})
-                </div>
-                <input
-                  type="text"
-                  value={activeHunter.name}
-                  onChange={(e) => onUpdateHunter({ ...activeHunter, name: e.target.value })}
-                  placeholder="Hunter Name"
-                  className="bg-transparent text-sm font-extrabold text-amber-300 focus:outline-none focus:border-b border-amber-500 w-full"
-                />
-                <div className="flex items-center gap-2 text-xs text-neutral-400 flex-wrap">
-                  <span className="font-semibold text-neutral-200">{activeHunter.playbook}</span>
-                  {(activeHunter.actionScientistFocus || activeHunter.subFeatures?.actionScientistFocus) && (
-                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-300 border border-cyan-700/60 font-medium">
-                      🔬 {activeHunter.actionScientistFocus || activeHunter.subFeatures?.actionScientistFocus}
-                    </span>
-                  )}
-                  <span>•</span>
-                  <span className="text-[11px] text-neutral-400">Owner: {activeHunter.ownerName}</span>
-                </div>
+          {/* Header Card: Compact Single-Line Character Strip + Play/Edit Mode Toggle */}
+          <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-2.5 shadow-xs space-y-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              {/* Left: Playbook + Badge Name + Owner */}
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <span className="text-sm font-bold text-amber-400">{activeHunter.playbook}</span>
+                <span className="px-2 py-0.5 rounded bg-neutral-800 border border-neutral-700 text-xs font-semibold text-neutral-100 truncate max-w-[180px]">
+                  {activeHunter.name}
+                </span>
+                {(activeHunter.actionScientistFocus || activeHunter.subFeatures?.actionScientistFocus) && (
+                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-300 border border-cyan-700/60 font-medium truncate max-w-[150px]">
+                    🔬 {activeHunter.actionScientistFocus || activeHunter.subFeatures?.actionScientistFocus}
+                  </span>
+                )}
+                <span className="text-xs text-neutral-400">Owner: {activeHunter.ownerName}</span>
               </div>
 
-              {/* Delete Hunter button for owner or GM */}
-              {(activeHunter.ownerId === currentUserId || role === 'GM') && (
+              {/* Right: Mode Toggle Button + Delete (only in Edit mode) */}
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
-                  onClick={() => {
-                    if (confirm(`Delete hunter "${activeHunter.name}"?`)) {
-                      onDeleteHunter(activeHunter.id);
-                    }
-                  }}
-                  className="text-neutral-500 hover:text-red-400 p-1 cursor-pointer"
-                  title="Delete this hunter"
+                  type="button"
+                  onClick={handleToggleSheetMode}
+                  title={sheetMode === 'play' ? 'Click to edit character sheet' : 'Click to lock into play mode'}
+                  className={`px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border shadow-xs ${
+                    sheetMode === 'play'
+                      ? 'bg-neutral-950 hover:bg-neutral-800 text-amber-300 border-neutral-700 hover:border-amber-500/60'
+                      : 'bg-amber-500 hover:bg-amber-400 text-neutral-950 border-amber-400'
+                  }`}
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>{sheetMode === 'play' ? '🔒 Play Mode' : '✏️ Edit Sheet'}</span>
                 </button>
-              )}
+
+                {/* Delete button only in Edit mode */}
+                {sheetMode === 'edit' && (activeHunter.ownerId === currentUserId || role === 'GM') && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm(`Delete hunter "${activeHunter.name}"?`)) {
+                        onDeleteHunter(activeHunter.id);
+                      }
+                    }}
+                    className="p-1 rounded text-neutral-500 hover:text-red-400 hover:bg-neutral-800 border border-neutral-800 cursor-pointer"
+                    title="Delete this hunter"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* Look / Description */}
-            <div>
-              <input
-                type="text"
-                value={activeHunter.look || ''}
-                onChange={(e) => onUpdateHunter({ ...activeHunter, look: e.target.value })}
-                placeholder="Hunter Look: rugged coat, ancient talisman, scarred knuckles..."
-                className="w-full bg-neutral-950/70 border border-neutral-800 rounded px-2 py-1 text-xs text-neutral-300 placeholder-neutral-500 focus:outline-none focus:border-neutral-600"
-              />
-            </div>
+            {/* Look & Origin / Appearance: Read-only in Play mode, Editable in Edit mode */}
+            {sheetMode === 'edit' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-neutral-800/80">
+                <div>
+                  <label className="text-[10px] text-neutral-400 font-semibold block mb-0.5">
+                    Character Name
+                  </label>
+                  <input
+                    type="text"
+                    value={activeHunter.name}
+                    onChange={(e) => onUpdateHunter({ ...activeHunter, name: e.target.value })}
+                    placeholder="Hunter Name"
+                    className="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1 text-xs text-amber-300 font-bold focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-neutral-400 font-semibold block mb-0.5">
+                    Look / Appearance
+                  </label>
+                  <input
+                    type="text"
+                    value={activeHunter.look || ''}
+                    onChange={(e) => onUpdateHunter({ ...activeHunter, look: e.target.value })}
+                    placeholder="rugged coat, ancient talisman, scarred knuckles..."
+                    className="w-full bg-neutral-950 border border-neutral-700 rounded px-2 py-1 text-xs text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+            ) : (
+              activeHunter.look ? (
+                <div className="pt-1 border-t border-neutral-800/60 text-xs text-neutral-400 italic flex items-center gap-1.5">
+                  <span className="text-[10px] font-semibold text-neutral-500 not-italic uppercase tracking-wide">
+                    Look:
+                  </span>
+                  <span>{activeHunter.look}</span>
+                </div>
+              ) : null
+            )}
           </div>
 
           {/* Interactive Trackers: Harm, Luck, XP */}
@@ -919,36 +1092,40 @@ export const HunterTab: React.FC<HunterTabProps> = ({
                       {val >= 0 ? `+${val}` : val}
                     </button>
                     {/* Stat Stepper for leveling up / tweaking */}
-                    <div className="flex items-center gap-1 text-[10px] text-neutral-500">
-                      <button
-                        onClick={() =>
-                          onUpdateHunter({
-                            ...activeHunter,
-                            stats: {
-                              ...activeHunter.stats,
-                              [stat]: Math.max(-2, val - 1),
-                            },
-                          })
-                        }
-                        className="hover:text-neutral-200 px-0.5"
-                      >
-                        -
-                      </button>
-                      <button
-                        onClick={() =>
-                          onUpdateHunter({
-                            ...activeHunter,
-                            stats: {
-                              ...activeHunter.stats,
-                              [stat]: Math.min(3, val + 1),
-                            },
-                          })
-                        }
-                        className="hover:text-neutral-200 px-0.5"
-                      >
-                        +
-                      </button>
-                    </div>
+                    {sheetMode === 'edit' && (
+                      <div className="flex items-center gap-1 text-[10px] text-neutral-500">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onUpdateHunter({
+                              ...activeHunter,
+                              stats: {
+                                ...activeHunter.stats,
+                                [stat]: Math.max(-2, val - 1),
+                              },
+                            })
+                          }
+                          className="hover:text-neutral-200 px-0.5"
+                        >
+                          -
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onUpdateHunter({
+                              ...activeHunter,
+                              stats: {
+                                ...activeHunter.stats,
+                                [stat]: Math.min(3, val + 1),
+                              },
+                            })
+                          }
+                          className="hover:text-neutral-200 px-0.5"
+                        >
+                          +
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -977,83 +1154,124 @@ export const HunterTab: React.FC<HunterTabProps> = ({
               </span>
             </div>
 
-            <div className="space-y-1.5">
-              {selectedPlaybookDef.moves.map((move) => {
-                const isSelected = (activeHunter.selectedMoves || []).includes(move.id);
-                const moveStat = move.stat || detectStatFromMove(undefined, move.name, move.description);
+            {sheetMode === 'play' && (activeHunter.selectedMoves || []).length === 0 ? (
+              <div className="p-3 rounded bg-neutral-950/60 border border-neutral-800/80 text-center text-neutral-400 text-xs">
+                <p className="italic">No playbook moves selected yet.</p>
+                <p className="text-[11px] text-neutral-500 mt-0.5">
+                  Click <strong className="text-amber-400">[✏️ Edit Sheet]</strong> to pick your starting moves.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {(sheetMode === 'play'
+                  ? selectedPlaybookDef.moves.filter((m) => (activeHunter.selectedMoves || []).includes(m.id))
+                  : selectedPlaybookDef.moves
+                ).map((move) => {
+                  const isSelected = (activeHunter.selectedMoves || []).includes(move.id);
+                  const moveStat = move.stat || detectStatFromMove(undefined, move.name, move.description);
+                  const isExpanded = expandedMoveIds[move.id] !== false;
 
-                return (
-                  <div
-                    key={move.id}
-                    onClick={() => handleToggleMove(move.id)}
-                    className={`p-2 rounded border transition-colors cursor-pointer text-xs space-y-1 ${
-                      isSelected
-                        ? 'bg-amber-950/30 border-amber-500/50 text-neutral-200'
-                        : 'bg-neutral-950/60 border-neutral-800/80 text-neutral-400 hover:border-neutral-700'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-1">
-                      <div className="flex items-center gap-1.5 font-bold min-w-0 flex-wrap">
-                        {isSelected ? (
-                          <CheckSquare className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        ) : (
-                          <Square className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
-                        )}
-                        <span className={isSelected ? 'text-amber-200' : 'text-neutral-300'}>
-                          {move.name}
-                        </span>
-                        {moveStat && (
-                          <span className="text-[9px] px-1 rounded bg-neutral-800 text-amber-400 uppercase font-mono">
-                            +{moveStat}
+                  return (
+                    <div
+                      key={move.id}
+                      onClick={() => {
+                        if (sheetMode === 'edit') {
+                          handleToggleMove(move.id);
+                        } else {
+                          toggleMoveAccordion(move.id);
+                        }
+                      }}
+                      className={`p-2 rounded border transition-colors text-xs space-y-1 ${
+                        isSelected
+                          ? 'bg-amber-950/30 border-amber-500/50 text-neutral-200'
+                          : 'bg-neutral-950/60 border-neutral-800/80 text-neutral-400 hover:border-neutral-700'
+                      } ${sheetMode === 'edit' ? 'cursor-pointer' : 'cursor-default'}`}
+                    >
+                      <div className="flex items-center justify-between gap-1">
+                        <div className="flex items-center gap-1.5 font-bold min-w-0 flex-wrap">
+                          {sheetMode === 'edit' ? (
+                            isSelected ? (
+                              <CheckSquare className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            ) : (
+                              <Square className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
+                            )
+                          ) : (
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                          )}
+                          <span className={isSelected ? 'text-amber-200' : 'text-neutral-300'}>
+                            {move.name}
                           </span>
-                        )}
+                          {moveStat && (
+                            <span className="text-[9px] px-1 rounded bg-neutral-800 text-amber-400 uppercase font-mono">
+                              +{moveStat}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          {moveStat && (
+                            (() => {
+                              const isWhammy = /whammy/i.test(move.name);
+                              const isCombatMag = /combat magic/i.test(move.name);
+                              const isAttackMove = isWhammy || isCombatMag;
+                              const attackMoveName = isWhammy ? 'The Big Whammy' : 'Combat Magic';
+                              const attackLabel = isAttackMove
+                                ? getAttackButtonLabel(attackMoveName, activeHunter, {
+                                    isBigWhammy: isWhammy,
+                                    isCombatMagic: isCombatMag,
+                                  })
+                                : null;
+
+                              return (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isAttackMove) {
+                                      onQuickRoll('weird', `Kick Some Ass (${attackMoveName})`);
+                                    } else {
+                                      onQuickRoll(moveStat, move.name);
+                                    }
+                                  }}
+                                  title={attackLabel || `Roll ${move.name} (+${moveStat})`}
+                                  className={`text-[10px] px-2 py-0.5 rounded font-bold cursor-pointer border flex items-center gap-1 shadow-xs transition-colors ${
+                                    isAttackMove
+                                      ? 'bg-red-950/80 hover:bg-red-900 text-red-200 border-red-700/60'
+                                      : 'bg-amber-600/30 hover:bg-amber-500 hover:text-neutral-950 text-amber-300 border-amber-500/50'
+                                  }`}
+                                >
+                                  <Dices className="w-3 h-3" />
+                                  <span>{isAttackMove ? attackLabel : 'Roll'}</span>
+                                </button>
+                              );
+                            })()
+                          )}
+
+                          {/* Accordion toggle button */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleMoveAccordion(move.id);
+                            }}
+                            className="p-1 rounded text-neutral-400 hover:text-white hover:bg-neutral-800 cursor-pointer"
+                            title={isExpanded ? 'Collapse description' : 'Expand description'}
+                          >
+                            {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
                       </div>
 
-                      {moveStat && (
-                        (() => {
-                          const isWhammy = /whammy/i.test(move.name);
-                          const isCombatMag = /combat magic/i.test(move.name);
-                          const isAttackMove = isWhammy || isCombatMag;
-                          const attackMoveName = isWhammy ? 'The Big Whammy' : 'Combat Magic';
-                          const attackLabel = isAttackMove
-                            ? getAttackButtonLabel(attackMoveName, activeHunter, {
-                                isBigWhammy: isWhammy,
-                                isCombatMagic: isCombatMag,
-                              })
-                            : null;
-
-                          return (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (isAttackMove) {
-                                  onQuickRoll('weird', `Kick Some Ass (${attackMoveName})`);
-                                } else {
-                                  onQuickRoll(moveStat, move.name);
-                                }
-                              }}
-                              title={attackLabel || `Roll ${move.name} (+${moveStat})`}
-                              className={`text-[10px] px-2 py-0.5 rounded font-bold cursor-pointer border flex items-center gap-1 shrink-0 ml-1 shadow-xs transition-colors ${
-                                isAttackMove
-                                  ? 'bg-red-950/80 hover:bg-red-900 text-red-200 border-red-700/60'
-                                  : 'bg-amber-600/30 hover:bg-amber-500 hover:text-neutral-950 text-amber-300 border-amber-500/50'
-                              }`}
-                            >
-                              <Dices className="w-3 h-3" />
-                              <span>{isAttackMove ? attackLabel : 'Roll'}</span>
-                            </button>
-                          );
-                        })()
+                      {isExpanded && (
+                        <p className="text-[11px] text-neutral-400 leading-relaxed pl-3 border-l border-neutral-800/80 mt-1">
+                          {move.description}
+                        </p>
                       )}
                     </div>
-
-                    <p className="text-[11px] text-neutral-400 leading-relaxed pl-5">
-                      {move.description}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Borrowed Moves Section */}
@@ -1066,17 +1284,19 @@ export const HunterTab: React.FC<HunterTabProps> = ({
                   ({(activeHunter.borrowedMoves || []).length})
                 </span>
               </div>
-              <button
-                onClick={() => {
-                  setSelectedBorrowedMoveId(null);
-                  setIsBorrowMoveModalOpen(true);
-                }}
-                className="px-2 py-0.5 rounded bg-amber-600/30 hover:bg-amber-500 hover:text-neutral-950 text-amber-300 font-semibold text-[10px] border border-amber-500/50 flex items-center gap-1 cursor-pointer transition-colors"
-                title="Borrow Playbook Move"
-              >
-                <Plus className="w-3 h-3" />
-                <span>Borrow Move</span>
-              </button>
+              {sheetMode === 'edit' && (
+                <button
+                  onClick={() => {
+                    setSelectedBorrowedMoveId(null);
+                    setIsBorrowMoveModalOpen(true);
+                  }}
+                  className="px-2 py-0.5 rounded bg-amber-600/30 hover:bg-amber-500 hover:text-neutral-950 text-amber-300 font-semibold text-[10px] border border-amber-500/50 flex items-center gap-1 cursor-pointer transition-colors"
+                  title="Borrow Playbook Move"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Borrow Move</span>
+                </button>
+              )}
             </div>
 
             {(!activeHunter.borrowedMoves || activeHunter.borrowedMoves.length === 0) ? (
@@ -1120,18 +1340,20 @@ export const HunterTab: React.FC<HunterTabProps> = ({
                             <Dices className="w-3 h-3" />
                             <span>Roll</span>
                           </button>
-                          <button
-                            onClick={() => {
-                              const updated = (activeHunter.borrowedMoves || []).filter(
-                                (m) => m.id !== bm.id
-                              );
-                              onUpdateHunter({ ...activeHunter, borrowedMoves: updated });
-                            }}
-                            title="Remove Borrowed Move"
-                            className="p-1 rounded text-neutral-500 hover:text-red-400 hover:bg-neutral-800 cursor-pointer"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
+                          {sheetMode === 'edit' && (
+                            <button
+                              onClick={() => {
+                                const updated = (activeHunter.borrowedMoves || []).filter(
+                                  (m) => m.id !== bm.id
+                                );
+                                onUpdateHunter({ ...activeHunter, borrowedMoves: updated });
+                              }}
+                              title="Remove Borrowed Move"
+                              className="p-1 rounded text-neutral-500 hover:text-red-400 hover:bg-neutral-800 cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -1163,20 +1385,22 @@ export const HunterTab: React.FC<HunterTabProps> = ({
                   <ChevronDown className="w-3 h-3 text-neutral-400" />
                 )}
               </button>
-              <button
-                onClick={() => {
-                  setCustomMoveId(null);
-                  setCustomMoveName('');
-                  setCustomMoveStat('none');
-                  setCustomMoveDesc('');
-                  setIsCustomMoveModalOpen(true);
-                }}
-                className="px-2 py-0.5 rounded bg-amber-600/30 hover:bg-amber-500 hover:text-neutral-950 text-amber-300 font-semibold text-[10px] border border-amber-500/50 flex items-center gap-1 cursor-pointer transition-colors"
-                title="Add Custom Move"
-              >
-                <Plus className="w-3 h-3" />
-                <span>Add Custom Move</span>
-              </button>
+              {sheetMode === 'edit' && (
+                <button
+                  onClick={() => {
+                    setCustomMoveId(null);
+                    setCustomMoveName('');
+                    setCustomMoveStat('none');
+                    setCustomMoveDesc('');
+                    setIsCustomMoveModalOpen(true);
+                  }}
+                  className="px-2 py-0.5 rounded bg-amber-600/30 hover:bg-amber-500 hover:text-neutral-950 text-amber-300 font-semibold text-[10px] border border-amber-500/50 flex items-center gap-1 cursor-pointer transition-colors"
+                  title="Add Custom Move"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Add Custom Move</span>
+                </button>
+              )}
             </div>
 
             {isCustomMovesExpanded && (
@@ -1220,31 +1444,35 @@ export const HunterTab: React.FC<HunterTabProps> = ({
                                 <Dices className="w-3 h-3" />
                                 <span>Roll</span>
                               </button>
-                              <button
-                                onClick={() => {
-                                  setCustomMoveId(cm.id);
-                                  setCustomMoveName(cm.name);
-                                  setCustomMoveStat(cm.stat || 'none');
-                                  setCustomMoveDesc(cm.description);
-                                  setIsCustomMoveModalOpen(true);
-                                }}
-                                title="Edit Custom Move"
-                                className="p-1 rounded text-neutral-400 hover:text-amber-300 hover:bg-neutral-800 cursor-pointer text-xs"
-                              >
-                                ✏️
-                              </button>
-                              <button
-                                onClick={() => {
-                                  const updated = (activeHunter.customMoves || []).filter(
-                                    (m) => m.id !== cm.id
-                                  );
-                                  onUpdateHunter({ ...activeHunter, customMoves: updated });
-                                }}
-                                title="Delete Custom Move"
-                                className="p-1 rounded text-neutral-500 hover:text-red-400 hover:bg-neutral-800 cursor-pointer"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
+                              {sheetMode === 'edit' && (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      setCustomMoveId(cm.id);
+                                      setCustomMoveName(cm.name);
+                                      setCustomMoveStat(cm.stat || 'none');
+                                      setCustomMoveDesc(cm.description);
+                                      setIsCustomMoveModalOpen(true);
+                                    }}
+                                    title="Edit Custom Move"
+                                    className="p-1 rounded text-neutral-400 hover:text-amber-300 hover:bg-neutral-800 cursor-pointer text-xs"
+                                  >
+                                    ✏️
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const updated = (activeHunter.customMoves || []).filter(
+                                        (m) => m.id !== cm.id
+                                      );
+                                      onUpdateHunter({ ...activeHunter, customMoves: updated });
+                                    }}
+                                    title="Delete Custom Move"
+                                    className="p-1 rounded text-neutral-500 hover:text-red-400 hover:bg-neutral-800 cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </div>
 
@@ -1281,6 +1509,49 @@ export const HunterTab: React.FC<HunterTabProps> = ({
                 return null;
               }
 
+              // In Play Mode: sleek compact list of equipped items with attack rolls
+              if (sheetMode === 'play') {
+                return (
+                  <div className="space-y-2">
+                    {selectedList.length === 0 ? (
+                      <p className="text-xs text-neutral-500 italic p-2 rounded bg-neutral-950/40 border border-neutral-850">
+                        No gear equipped yet. Click <strong className="text-amber-400">[✏️ Edit Sheet]</strong> above to choose weapons and equipment.
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedList.map((item) => {
+                          const attack = isAttackItem(item);
+                          const weaponName = extractCleanWeaponName(item);
+                          const rollStat = getAttackRollStat(activeHunter, { attackName: weaponName });
+                          const label = getAttackButtonLabel(weaponName, activeHunter);
+
+                          return (
+                            <div
+                              key={item}
+                              className="px-2.5 py-1.5 rounded-lg border bg-neutral-950/80 border-neutral-800 text-xs text-neutral-200 flex items-center gap-2 shadow-xs"
+                            >
+                              <span className="font-medium">{item}</span>
+                              {attack && (
+                                <button
+                                  type="button"
+                                  onClick={() => onQuickRoll(rollStat, `Kick Some Ass (${weaponName})`)}
+                                  className="px-2 py-0.5 rounded bg-red-950/80 hover:bg-red-900 text-red-200 border border-red-700/60 text-[10px] font-bold flex items-center gap-1 cursor-pointer transition-colors shadow-xs"
+                                  title={label}
+                                >
+                                  <Crosshair className="w-3 h-3 text-red-400" />
+                                  <span>{label}</span>
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
+              // In Edit Mode: full interactive categories
               return (
                 <div className="space-y-3">
                   {categories.map((cat, catIdx) => {
@@ -1337,7 +1608,7 @@ export const HunterTab: React.FC<HunterTabProps> = ({
                                 {isChecked ? (
                                   <CheckSquare className="w-3 h-3 text-amber-400 shrink-0" />
                                 ) : (
-                                  <Square className="w-3 h-3 text-neutral-500 shrink-0" />
+                                  <Square className="w-3.5 h-3.5 text-neutral-500 shrink-0" />
                                 )}
                                 <span>{opt}</span>
                               </button>
@@ -1352,18 +1623,31 @@ export const HunterTab: React.FC<HunterTabProps> = ({
             })()}
 
             {/* Custom Equipment & Notes Field */}
-            <div className="space-y-1 pt-1 border-t border-neutral-800/80">
-              <label className="text-[11px] font-semibold text-neutral-400 block">
-                Additional Equipment, Custom Items & Notes:
-              </label>
-              <textarea
-                value={activeHunter.gear || ''}
-                onChange={(e) => onUpdateHunter({ ...activeHunter, gear: e.target.value })}
-                placeholder="e.g. Remington 12-gauge shotgun (3-harm close reload messy), silver knife (2-harm hand holy), flashlight, lockpicks..."
-                rows={2}
-                className="w-full bg-neutral-950/80 border border-neutral-800 rounded p-1.5 text-xs text-neutral-200 placeholder-neutral-500 resize-none focus:outline-none focus:border-neutral-600 leading-relaxed font-sans"
-              />
-            </div>
+            {sheetMode === 'edit' ? (
+              <div className="space-y-1 pt-1 border-t border-neutral-800/80">
+                <label className="text-[11px] font-semibold text-neutral-400 block">
+                  Additional Equipment, Custom Items & Notes:
+                </label>
+                <textarea
+                  value={activeHunter.gear || ''}
+                  onChange={(e) => onUpdateHunter({ ...activeHunter, gear: e.target.value })}
+                  placeholder="e.g. Remington 12-gauge shotgun (3-harm close reload messy), silver knife (2-harm hand holy), flashlight, lockpicks..."
+                  rows={2}
+                  className="w-full bg-neutral-950/80 border border-neutral-800 rounded p-1.5 text-xs text-neutral-200 placeholder-neutral-500 resize-none focus:outline-none focus:border-neutral-600 leading-relaxed font-sans"
+                />
+              </div>
+            ) : (
+              activeHunter.gear ? (
+                <div className="space-y-1 pt-1 border-t border-neutral-800/80">
+                  <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-wide">
+                    Additional Equipment & Notes:
+                  </span>
+                  <p className="text-xs text-neutral-300 bg-neutral-950/50 p-2 rounded border border-neutral-800 whitespace-pre-wrap leading-relaxed">
+                    {activeHunter.gear}
+                  </p>
+                </div>
+              ) : null
+            )}
           </div>
         </div>
       )}
@@ -1501,55 +1785,169 @@ export const HunterTab: React.FC<HunterTabProps> = ({
               Select an improvement for <strong>{activeHunter.name}</strong>. Choosing an improvement clears the 5 experience marks and increments your Level Up count (currently {activeHunter.levelUpCount || 0}).
             </p>
 
-            {/* Standard Playbook Improvements */}
-            <div className="space-y-1.5">
-              <div className="text-[11px] font-bold text-neutral-400 uppercase tracking-wide">
-                Standard Playbook Improvements
-              </div>
-              {selectedPlaybookDef.improvements.map((imp, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleSelectImprovement(imp)}
-                  className="w-full text-left p-2 rounded bg-neutral-950 hover:bg-amber-500/20 text-neutral-200 hover:text-amber-200 border border-neutral-800 hover:border-amber-500/60 transition-colors cursor-pointer font-medium"
-                >
-                  ★ {imp}
-                </button>
-              ))}
-            </div>
-
-            {/* Advanced Improvements Section */}
-            {(activeHunter.levelUpCount || 0) >= 5 ? (
-              <div className="pt-2 border-t border-amber-500/40 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
-                    <span>⭐ Advanced Improvements</span>
-                  </span>
-                  <span className="text-[10px] text-amber-400/80 font-mono">
-                    Unlocked ({activeHunter.levelUpCount || 0}/5 Level Ups)
-                  </span>
+            {pendingStatPick ? (
+              <div className="space-y-2.5 bg-neutral-950 p-3 rounded-lg border border-amber-500/60">
+                <div className="font-bold text-amber-300 text-xs flex items-center justify-between">
+                  <span>⭐ Universal Rating Cap: Choose Attribute</span>
+                  <span className="text-[10px] text-amber-400/80 font-mono">Max Cap: +3</span>
                 </div>
-                <p className="text-[11px] text-neutral-400">
-                  Veterans of the hunt may choose from the advanced list below:
+                <p className="text-[11px] text-neutral-300">
+                  Select any single rating to increase by +1. Attributes cannot exceed the hard cap of +3.
                 </p>
-                <div className="space-y-1.5">
-                  {(selectedPlaybookDef?.advancedImprovements || UNIVERSAL_ADVANCED_IMPROVEMENTS).map((adv, idx) => (
-                    <button
-                      key={`adv-${idx}`}
-                      onClick={() => handleSelectImprovement(adv)}
-                      className="w-full text-left p-2 rounded bg-amber-950/30 hover:bg-amber-500/20 text-amber-100 hover:text-amber-200 border border-amber-600/40 hover:border-amber-400 transition-colors cursor-pointer font-medium"
-                    >
-                      ⭐ {adv}
-                    </button>
-                  ))}
+                <div className="grid grid-cols-5 gap-1.5 pt-1">
+                  {(['charm', 'cool', 'sharp', 'tough', 'weird'] as StatType[]).map((st) => {
+                    const currentVal = activeHunter.stats[st] ?? 0;
+                    const isMaxed = currentVal >= 3;
+                    return (
+                      <button
+                        key={st}
+                        type="button"
+                        disabled={isMaxed}
+                        onClick={() => handleSelectImprovement(pendingStatPick.imp, pendingStatPick.slotId, st)}
+                        className={`p-2 rounded border text-center transition-all cursor-pointer flex flex-col items-center justify-center ${
+                          isMaxed
+                            ? 'bg-neutral-900/60 border-neutral-800 text-neutral-600 cursor-not-allowed opacity-40'
+                            : 'bg-neutral-900 hover:bg-amber-500/20 text-neutral-200 hover:text-amber-200 border-neutral-700 hover:border-amber-500'
+                        }`}
+                      >
+                        <span className="uppercase text-[10px] font-bold text-neutral-400">{st}</span>
+                        <span className="text-xs font-mono font-bold mt-0.5 text-amber-300">
+                          {currentVal >= 0 ? `+${currentVal}` : currentVal} → {currentVal + 1 >= 0 ? `+${currentVal + 1}` : currentVal + 1}
+                        </span>
+                        {isMaxed && <span className="text-[9px] text-red-400 font-semibold mt-0.5">Cap +3</span>}
+                      </button>
+                    );
+                  })}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setPendingStatPick(null)}
+                  className="text-[11px] text-neutral-400 hover:text-white underline pt-1 block cursor-pointer"
+                >
+                  ← Back to improvement choices
+                </button>
               </div>
             ) : (
-              <div className="pt-2 border-t border-neutral-800 p-2 rounded bg-neutral-950/60 text-neutral-500 text-[11px] flex items-center justify-between">
-                <span className="font-semibold text-neutral-400">⭐ Advanced Improvements</span>
-                <span className="font-mono">
-                  Unlocks at 5 Level Ups ({5 - (activeHunter.levelUpCount || 0)} more needed)
-                </span>
-              </div>
+              <>
+                {/* Standard Playbook Improvements */}
+                <div className="space-y-1.5">
+                  <div className="text-[11px] font-bold text-neutral-400 uppercase tracking-wide">
+                    Standard Playbook Improvements
+                  </div>
+                  {selectedPlaybookDef.improvements.map((imp, idx) => {
+                    const slotId = getImprovementSlotId(
+                      selectedPlaybookDef.id,
+                      imp,
+                      idx,
+                      false,
+                      selectedPlaybookDef.improvements
+                    );
+                    const isTaken = isImprovementTaken(activeHunter, slotId, imp);
+
+                    return (
+                      <button
+                        key={`std-${idx}-${slotId}`}
+                        type="button"
+                        disabled={isTaken}
+                        onClick={() => {
+                          if (
+                            imp.toLowerCase().includes('+1 any') ||
+                            imp.toLowerCase().includes('+1 to any rating')
+                          ) {
+                            setPendingStatPick({ imp, slotId });
+                          } else {
+                            handleSelectImprovement(imp, slotId);
+                          }
+                        }}
+                        className={`w-full text-left p-2 rounded transition-colors font-medium flex items-center justify-between ${
+                          isTaken
+                            ? 'bg-neutral-950 text-neutral-500 border border-neutral-900 opacity-40 line-through pointer-events-none cursor-not-allowed'
+                            : 'bg-neutral-950 hover:bg-amber-500/20 text-neutral-200 hover:text-amber-200 border border-neutral-800 hover:border-amber-500/60 cursor-pointer'
+                        }`}
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <span>{isTaken ? '✓' : '★'}</span>
+                          <span>{imp}</span>
+                        </span>
+                        {isTaken && (
+                          <span className="text-[10px] font-mono uppercase text-neutral-500">Taken</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Advanced Improvements Section */}
+                {(activeHunter.levelUpCount || 0) >= 5 ? (
+                  <div className="pt-2 border-t border-amber-500/40 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-amber-300 flex items-center gap-1">
+                        <span>⭐ Advanced Improvements</span>
+                      </span>
+                      <span className="text-[10px] text-amber-400/80 font-mono">
+                        Unlocked ({activeHunter.levelUpCount || 0}/5 Level Ups)
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-neutral-400">
+                      Veterans of the hunt may choose from the advanced list below:
+                    </p>
+                    <div className="space-y-1.5">
+                      {(selectedPlaybookDef?.advancedImprovements || UNIVERSAL_ADVANCED_IMPROVEMENTS).map(
+                        (adv, idx) => {
+                          const advList =
+                            selectedPlaybookDef?.advancedImprovements || UNIVERSAL_ADVANCED_IMPROVEMENTS;
+                          const slotId = getImprovementSlotId(
+                            selectedPlaybookDef.id,
+                            adv,
+                            idx,
+                            true,
+                            advList
+                          );
+                          const isTaken = isImprovementTaken(activeHunter, slotId, adv);
+
+                          return (
+                            <button
+                              key={`adv-${idx}-${slotId}`}
+                              type="button"
+                              disabled={isTaken}
+                              onClick={() => {
+                                if (
+                                  adv.toLowerCase().includes('+1 any') ||
+                                  adv.toLowerCase().includes('+1 to any rating')
+                                ) {
+                                  setPendingStatPick({ imp: adv, slotId });
+                                } else {
+                                  handleSelectImprovement(adv, slotId);
+                                }
+                              }}
+                              className={`w-full text-left p-2 rounded transition-colors font-medium flex items-center justify-between ${
+                                isTaken
+                                  ? 'bg-neutral-950 text-neutral-500 border border-neutral-900 opacity-40 line-through pointer-events-none cursor-not-allowed'
+                                  : 'bg-amber-950/30 hover:bg-amber-500/20 text-amber-100 hover:text-amber-200 border border-amber-600/40 hover:border-amber-400 cursor-pointer'
+                              }`}
+                            >
+                              <span className="flex items-center gap-1.5">
+                                <span>{isTaken ? '✓' : '⭐'}</span>
+                                <span>{adv}</span>
+                              </span>
+                              {isTaken && (
+                                <span className="text-[10px] font-mono uppercase text-neutral-500">Taken</span>
+                              )}
+                            </button>
+                          );
+                        }
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="pt-2 border-t border-neutral-800 p-2 rounded bg-neutral-950/60 text-neutral-500 text-[11px] flex items-center justify-between">
+                    <span className="font-semibold text-neutral-400">⭐ Advanced Improvements</span>
+                    <span className="font-mono">
+                      Unlocks at 5 Level Ups ({5 - (activeHunter.levelUpCount || 0)} more needed)
+                    </span>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

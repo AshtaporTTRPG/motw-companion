@@ -88,6 +88,9 @@ export interface PlaybookSubFeatures {
   naturalAttackExtraRange?: string;
   // The Action Scientist
   actionScientistFocus?: string;
+  actionScientistFocuses?: string[];
+  // The Changeling
+  changelingHeritageTags?: string[];
   // Generic / Scratchpad
   genericNotes?: string;
   genericChecklist?: string[];
@@ -125,6 +128,9 @@ export interface HunterProfile {
   selectedGear?: string[];
   luckSpecial: string;
   improvementsTaken: string[];
+  takenImprovements?: string[];
+  maxAreasOfStudy?: number;
+  sheetMode?: 'play' | 'edit';
   levelUpCount?: number;
   advancementsTaken?: string[];
   borrowedMoves?: BorrowedMove[];
